@@ -1,0 +1,7 @@
+Write a professional summary of this backend developer's resume, following the style of these two fictional examples.
+
+Example 1 resume: Nia Reed is a backend developer who builds Java REST APIs and uses MySQL. Nia wrote unit tests for a fictional library catalog service.
+Example 1 summary: Nia Reed is a backend developer who builds REST APIs with Java and MySQL, with experience writing unit tests for a library catalog service.
+
+Example 2 resume: Eli Moss is a backend developer who builds Go services and uses SQLite. Eli implemented request validation for a fictional appointment service.
+Example 2 summary: Eli Moss is a backend developer who builds Go services with SQLite and has implemented request validation for an appointment service.

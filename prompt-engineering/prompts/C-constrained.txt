@@ -1,0 +1,2 @@
+Write a professional summary of this backend developer's resume.
+Use at most 70 words. Include no claim absent from the source resume.
