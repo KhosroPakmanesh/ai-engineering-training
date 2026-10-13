@@ -1,0 +1,6 @@
+[
+  { "question": "Which project used PostgreSQL?", "expectedSectionIds": ["P1"] },
+  { "question": "Which project used Kubernetes?", "expectedSectionIds": ["P3"] },
+  { "question": "Which project used ASP.NET Core?", "expectedSectionIds": ["P1", "P5"] },
+  { "question": "Which project used Salesforce?", "expectedSectionIds": [] }
+]

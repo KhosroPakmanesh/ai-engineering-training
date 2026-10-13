@@ -4,6 +4,13 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/shared/">
+    <Project Path="shared/shared/shared.csproj" />
+    <Project Path="shared/shared.tests/shared.tests.csproj" />
+  </Folder>
+  <Folder Name="/solution-items/">
+    <File Path="AGENTS.md" />
+  </Folder>
   <Folder Name="/01-prompt-engineering/">
     <Project Path="01-prompt-engineering/prompt-engineering.tests/prompt-engineering.tests.csproj" />
     <Project Path="01-prompt-engineering/prompt-engineering/prompt-engineering.csproj" />
@@ -11,5 +18,9 @@
   <Folder Name="/02-structured-output/">
     <Project Path="02-structured-output/structured-output/structured-output.csproj" />
     <Project Path="02-structured-output/structured-output.tests/structured-output.tests.csproj" />
+  </Folder>
+  <Folder Name="/03-context-engineering/">
+    <Project Path="03-context-engineering/context-engineering/context-engineering.csproj" />
+    <Project Path="03-context-engineering/context-engineering.tests/context-engineering.tests.csproj" />
   </Folder>
 </Solution>

@@ -11,6 +11,6 @@
     <PackageReference Include="Microsoft.Agents.AI" Version="1.24.0" />
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
     <None Update="profile.schema.json;sample-data/**/*" CopyToOutputDirectory="PreserveNewest" />
-    <None Update=".env" CopyToOutputDirectory="Always" />
+    <ProjectReference Include="../../shared/shared/shared.csproj" />
   </ItemGroup>
 </Project>
