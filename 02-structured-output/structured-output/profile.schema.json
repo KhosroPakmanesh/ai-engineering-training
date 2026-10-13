@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type":["string","null"]},
+    "email": {"type":["string","null"]},
+    "phone": {"type":["string","null"]},
+    "evidence": {"$ref":"#/$defs/evidence"},
+    "experience": {
+      "type": "array",
+      "items": {"$ref":"#/$defs/experience"}
+    },
+    "education": {
+      "type": "array",
+      "items": {"$ref":"#/$defs/education"}
+    },
+    "skills": {
+      "type": "array",
+      "items": {"$ref":"#/$defs/skill"}
+    }
+  },
+  "required": ["name","email","phone","evidence","experience","education","skills"],
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {"type":"string","minLength":1},
+        "quote": {"type":"string","minLength":1}
+      },
+      "required": ["source","quote"]
+    },
+    "experience": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "employer": {"type":["string","null"]},
+        "role": {"type":["string","null"]},
+        "startDate": {"type":["string","null"]},
+        "endDate": {"type":["string","null"]},
+        "durationMonths": {"type":["integer","null"],"minimum":0},
+        "evidence": {"$ref":"#/$defs/evidence"}
+      },
+      "required": ["employer","role","startDate","endDate","durationMonths","evidence"]
+    },
+    "education": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "institution": {"type":["string","null"]},
+        "degree": {"type":["string","null"]},
+        "fieldOfStudy": {"type":["string","null"]},
+        "startDate": {"type":["string","null"]},
+        "endDate": {"type":["string","null"]},
+        "evidence": {"$ref":"#/$defs/evidence"}
+      },
+      "required": ["institution","degree","fieldOfStudy","startDate","endDate","evidence"]
+    },
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type":"string","minLength":1},
+        "proficiency": {"type":["string","null"]},
+        "evidence": {"$ref":"#/$defs/evidence"}
+      },
+      "required": ["name","proficiency","evidence"]
+    }
+  }
+}

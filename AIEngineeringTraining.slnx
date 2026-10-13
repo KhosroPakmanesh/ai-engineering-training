@@ -1,0 +1,15 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/01-prompt-engineering/">
+    <Project Path="01-prompt-engineering/prompt-engineering.tests/prompt-engineering.tests.csproj" />
+    <Project Path="01-prompt-engineering/prompt-engineering/prompt-engineering.csproj" />
+  </Folder>
+  <Folder Name="/02-structured-output/">
+    <Project Path="02-structured-output/structured-output/structured-output.csproj" />
+    <Project Path="02-structured-output/structured-output.tests/structured-output.tests.csproj" />
+  </Folder>
+</Solution>

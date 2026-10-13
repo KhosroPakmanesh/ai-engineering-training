@@ -1,0 +1,80 @@
+{
+  "name": "Mira Example",
+  "email": "mira@example.test",
+  "phone": "+358 50 000 0101",
+  "evidence": {
+    "source": "resume.md",
+    "quote": "Mira Example | mira@example.test | +358 50 000 0101"
+  },
+  "experience": [
+    {
+      "employer": "Northwind Example Systems",
+      "role": "Software Developer",
+      "startDate": "2021-06",
+      "endDate": "2023-08",
+      "durationMonths": null,
+      "evidence": {
+        "source": "resume.md",
+        "quote": "Northwind Example Systems | Software Developer | 2021-06 to 2023-08"
+      }
+    },
+    {
+      "employer": "Contoso Example Studio",
+      "role": "Junior Developer",
+      "startDate": "2019-09",
+      "endDate": "2021-05",
+      "durationMonths": null,
+      "evidence": {
+        "source": "resume.md",
+        "quote": "Contoso Example Studio | Junior Developer | 2019-09 to 2021-05"
+      }
+    }
+  ],
+  "education": [
+    {
+      "institution": "Example Technical University",
+      "degree": "Bachelor of Science",
+      "fieldOfStudy": "Computer Science",
+      "startDate": "2015-09",
+      "endDate": "2019-06",
+      "evidence": {
+        "source": "resume.md",
+        "quote": "Example Technical University | Bachelor of Science | Computer Science | 2015-09 to 2019-06"
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "C#",
+      "proficiency": "advanced",
+      "evidence": {
+        "source": "resume.md",
+        "quote": "C#: advanced"
+      }
+    },
+    {
+      "name": ".NET",
+      "proficiency": "intermediate",
+      "evidence": {
+        "source": "resume.md",
+        "quote": ".NET: intermediate"
+      }
+    },
+    {
+      "name": "SQL",
+      "proficiency": "intermediate",
+      "evidence": {
+        "source": "resume.md",
+        "quote": "SQL: intermediate"
+      }
+    },
+    {
+      "name": "Git",
+      "proficiency": "intermediate",
+      "evidence": {
+        "source": "resume.md",
+        "quote": "Git: intermediate"
+      }
+    }
+  ]
+}

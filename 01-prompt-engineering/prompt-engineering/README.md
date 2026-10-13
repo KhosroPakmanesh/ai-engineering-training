@@ -51,7 +51,7 @@ The solution includes `prompt-engineering.tests`, a small [xUnit project](https:
 From the repository root, run:
 
 ```sh
-dotnet test AIEngineeringTraining.sln
+dotnet test AIEngineeringTraining.slnx
 ```
 
 You can also use Visual Studio's Test Explorer. A complete run makes three real API requests. Each case checks for a nonempty summary with no blank lines separating paragraphs; C also checks the 70-word limit. Summaries and word counts appear in the test output. Missing configuration and API failures fail the tests. A rate limit or unavailable provider does not establish a code defect, and a model can fail a formatting constraint on a later run. Factual accuracy and whether examples influence style still need manual review.
