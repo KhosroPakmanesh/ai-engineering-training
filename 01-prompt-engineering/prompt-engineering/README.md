@@ -54,26 +54,18 @@ Use a model that supports chat completions and the requested settings. If a requ
 
 Some reasoning models spend output tokens on thinking as well as on the final answer. A short summary can therefore need more than 200 output tokens. The program rejects an empty answer or one cut short by the output limit. Program.cs checks every prompt file and the shared settings before the first request, so missing inputs are found early. See [OpenRouter's explanation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#reasoning-tokens-and-max_tokens).
 
+## Understand the results
+
+Program.cs prints each summary under its prompt name, followed by its word count. Compare A, B, and C with the same resume. All three requests ask for one paragraph; C also asks for at most 70 words.
+
+The word counter splits text at spaces, tabs, and line breaks. It helps you check the 70-word limit. You still need to read the summaries to judge whether the facts are correct and useful. The model can produce different wording even when you keep all inputs the same.
+
 ## Learn by changing a prompt
 
 1. Read A, B, and C. Predict how the examples and the word limit might change the summaries.
 2. Run the program and compare each summary with [the resume](resume.md). Look at both the wording and the facts it chose.
 3. Check whether C stayed within 70 words. For B, check whether the AI copied a fact from an example that does not appear in the candidate's resume.
 4. Change one prompt and run again. Each run makes another three requests. Keep the resume, model, and settings fixed so you can study the effect of that change.
-
-The word counter splits text at spaces, tabs, and line breaks. It helps you check the 70-word limit. You still need to read the summaries to judge whether the facts are correct and useful. The model can produce different wording even when you keep all inputs the same.
-
-## Tests
-
-The solution includes `prompt-engineering.tests`, a small [xUnit project](https://xunit.net/docs/getting-started/v2/getting-started). [PromptTests.cs](../prompt-engineering.tests/PromptTests.cs) contains four cases. Three ask the real model for a summary; these are integration tests. The fourth checks locally that a missing prompt is rejected before any request. The integration tests call `ResumeSummarizer.SummarizeAsync`, just like the console app, and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
-
-From the repository root, run:
-
-```sh
-dotnet test 01-prompt-engineering/prompt-engineering.tests/prompt-engineering.tests.csproj
-```
-
-You can also use Visual Studio's Test Explorer. A complete test run makes **three real API requests**. The integration cases require a nonempty summary with no blank lines between paragraphs; C must also stay within 70 words. The summaries and word counts appear in test output. Missing settings or API errors fail the tests. A busy provider can cause a failure even when the code is working, and a model can miss a formatting rule on a later run. Read the answers yourself to judge factual accuracy and whether the examples influenced their style.
 
 ## Files to read
 
@@ -92,5 +84,17 @@ prompt-engineering.csproj                     .NET 10 project, SDK dependency, a
 ```
 
 Start by reading Program.cs from top to bottom, then follow its call to ResumeSummarizer.cs. Run the comparison and use the printed summaries and word counts to see how the three instructions affect the answer.
+
+## Tests
+
+The solution includes `prompt-engineering.tests`, a small [xUnit project](https://xunit.net/docs/getting-started/v2/getting-started). [PromptTests.cs](../prompt-engineering.tests/PromptTests.cs) contains four cases. Three ask the real model for a summary; these are integration tests. The fourth checks locally that a missing prompt is rejected before any request. The integration tests call `ResumeSummarizer.SummarizeAsync`, just like the console app, and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+
+From the repository root, run:
+
+```sh
+dotnet test 01-prompt-engineering/prompt-engineering.tests/prompt-engineering.tests.csproj
+```
+
+You can also use Visual Studio's Test Explorer. A complete test run makes **three real API requests**. The integration cases require a nonempty summary with no blank lines between paragraphs; C must also stay within 70 words. The summaries and word counts appear in test output. Missing settings or API errors fail the tests. A busy provider can cause a failure even when the code is working, and a model can miss a formatting rule on a later run. Read the answers yourself to judge factual accuracy and whether the examples influenced their style.
 
 References: [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet) and [OpenRouter Chat Completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion).

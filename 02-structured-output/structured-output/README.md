@@ -30,7 +30,9 @@ flowchart TD
     D -->|No| I
 ```
 
-ProfileValidator.cs first checks the JSON shape and converts it into C# records. ProfileChecks.cs then checks the source quotes, extracted facts, and dates. A failure stops at that check. Only a profile that passes reaches skill cleanup and saving; missing input files or settings also stop the flow.
+The schema checks field names and value types. ProfileValidator.cs checks this JSON shape and converts the JSON into C# records. ProfileChecks.cs then checks that the quoted text exists in the resume and contains the extracted facts. It accepts dates such as `2024`, `2024-01`, or `2024-01-31` without filling in a missing month or day. An end date that is certainly earlier than its start date is rejected.
+
+Only a profile that passes these checks reaches skill cleanup and saving. ProfileValidator.cs trims skill names and keeps the first version of each name, ignoring case. A failed check stops the flow; missing input files or settings stop it before the request.
 
 ## Run
 
@@ -53,7 +55,13 @@ You can also run the project in Visual Studio. Set `structured-output` as the st
 
 Choose a model and provider that support JSON Schema structured output. A schema describes the fields and value types the answer must contain. If the request fails, the program prints the HTTP status and provider error message. HTTP 429 means the provider is limiting requests or is too busy. Wait and try again, or change the model in `shared/shared/.env`. After changing that file, stop any running debugging session and rebuild to copy the new settings.
 
+## Understand the results
+
 An empty answer or one cut short by the output limit is rejected. If the JSON or extracted values fail a check, the program reports where it failed and exits with code 1. A profile that passes the checks is printed and saved as `profile.json` beside the executable. The program prints the file's full path so you can find it. A failed request or validation check leaves a previously saved profile in place.
+
+The profile uses `null` for unknown facts and arrays for `experience`, `education`, and `skills`. Each item's `evidence` gives a source filename and a supporting quote. Compare those quotes with the resume to understand where the values came from.
+
+You still need to judge meaning: a quote mentioning a qualification does not prove the candidate earned it. The model can also give a different response when you repeat the same request.
 
 ## Learn by changing a prompt
 
@@ -61,20 +69,6 @@ An empty answer or one cut short by the output limit is rejected. If the JSON or
 2. Run the program and compare its profile with the resume and [the expected example](sample-data/profile.example.json). Look for a source quote supporting each extracted item.
 3. Change `resumeFile` at the top of Program.cs to `resume-ambiguous.md` and run again. The missing degree, phone, and skill proficiency should remain `null`. The ambiguous start date should also be `null`, and SQL should appear once.
 4. Change one instruction in CvExtractor.cs and run again. Each run makes another request. Observe which values change and which fields the schema still requires.
-
-The schema checks field names and value types. ProfileChecks.cs checks that the quoted text exists in the resume and contains the extracted facts. It accepts dates such as `2024`, `2024-01`, or `2024-01-31`, preserving the detail stated in the resume. An end date that is certainly earlier than its start date is rejected. ProfileValidator.cs then trims skill names and keeps the first version of each name, ignoring case. You still need to judge meaning: a quote mentioning a qualification does not prove the candidate earned it. The model can also give a different response when you repeat the same request.
-
-## Tests
-
-The solution includes `structured-output.tests`, a small xUnit project. [StructuredOutputTests.cs](../structured-output.tests/StructuredOutputTests.cs) contains seven cases. Two ask the real model to extract a profile; these integration tests call `CvExtractor.ExtractAsync`, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. Five local cases check a known example profile, invalid JSON and schema failures, source facts, partial dates and date order, and duplicate skills. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
-
-From the repository root, run:
-
-```sh
-dotnet test 02-structured-output/structured-output.tests/structured-output.tests.csproj
-```
-
-You can also use Visual Studio's Test Explorer. A complete test run makes **two real API requests**. The integration tests check that the profile has a name and entries for experience, education, and skills, and keeps missing facts as `null`. The profiles appear in test output. Missing settings, API errors, and rejected model output fail the tests. A busy provider can cause a failure even when the code is working. Read the profile and its supporting quotes yourself to judge whether the facts mean what the AI claims.
 
 ## Files to read
 
@@ -96,5 +90,17 @@ structured-output.csproj                      .NET 10 project and pinned package
 ```
 
 Follow Program.cs from reading the resume to requesting, checking, and saving the profile. The printed JSON lets you inspect both the extracted facts and the quotes used to support them.
+
+## Tests
+
+The solution includes `structured-output.tests`, a small xUnit project. [StructuredOutputTests.cs](../structured-output.tests/StructuredOutputTests.cs) contains seven cases. Two ask the real model to extract a profile; these integration tests call `CvExtractor.ExtractAsync`, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. Five local cases check a known example profile, invalid JSON and schema failures, source facts, partial dates and date order, and duplicate skills. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+
+From the repository root, run:
+
+```sh
+dotnet test 02-structured-output/structured-output.tests/structured-output.tests.csproj
+```
+
+You can also use Visual Studio's Test Explorer. A complete test run makes **two real API requests**. The integration tests check that the profile has a name and entries for experience, education, and skills, and keeps missing facts as `null`. The profiles appear in test output. Missing settings, API errors, and rejected model output fail the tests. A busy provider can cause a failure even when the code is working. Read the profile and its supporting quotes yourself to judge whether the facts mean what the AI claims.
 
 References: [Microsoft Agent Framework structured output](https://learn.microsoft.com/en-us/agent-framework/agents/structured-outputs), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), and [OpenRouter structured output](https://openrouter.ai/docs/guides/features/structured-outputs).

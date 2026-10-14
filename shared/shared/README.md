@@ -44,13 +44,30 @@ shared.csproj copies `.env` into its build output folder. Because the applicatio
 
 Building this library makes no model requests. Each application's README tells you how many requests its experiment makes, which model features it needs, and how to understand failures.
 
+## Understand the results
+
+ReadSettingsAsync returns the key and model to the calling application after checking that both settings are filled in and are not the example placeholders. This local check does not confirm that the key works or the model is available; the application's API request finds those problems.
+
+ReadResponse checks whether an answer is present and complete. It returns valid text exactly as received. This does not check whether the facts are correct; each lesson has its own source checks, and you still review the answer's meaning yourself.
+
+If a request fails, WriteError prints the HTTP status, available provider details, and advice about what to check. Read that message in the learning application's console.
+
 ## Learn by changing a check
 
 1. Read ParseSettings. Predict what it does with a comment line, a quoted model name, and an equals sign inside a value.
 2. Compare your prediction with [OpenRouterTests.cs](../shared.tests/OpenRouterTests.cs). These tests use made-up settings, so you can explore the parsing rules without a real API key.
 3. Change one test input and run the shared tests. Observe why the settings or response are accepted or rejected.
 
-ReadResponse checks whether an answer is present and complete. It returns valid text exactly as received. This does not check whether the facts are correct; each lesson has its own source checks, and you still review the answer's meaning yourself.
+## Files to read
+
+```text
+OpenRouter.cs                        Shared helper methods and timeout
+shared.csproj                        .NET 10 library and settings copy
+../shared.tests/OpenRouterTests.cs   Three deterministic shared checks
+../shared.tests/shared.tests.csproj  xUnit project referencing the library
+.env                                 Your OpenRouter key and model
+.env.example                         Settings template
+```
 
 ## Tests
 
@@ -63,16 +80,5 @@ dotnet test shared/shared.tests/shared.tests.csproj
 ```
 
 You can also use Visual Studio's Test Explorer. This test run makes **zero API requests**. It uses made-up settings and responses, so it can check the helpers without contacting a model.
-
-## Files to read
-
-```text
-OpenRouter.cs                        Shared helper methods and timeout
-shared.csproj                        .NET 10 library and settings copy
-../shared.tests/OpenRouterTests.cs   Three deterministic shared checks
-../shared.tests/shared.tests.csproj  xUnit project referencing the library
-.env                                 Your OpenRouter key and model
-.env.example                         Settings template
-```
 
 References: [MSBuild project items and references](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items).

@@ -100,16 +100,19 @@ For the shared class library, describe the support library and its build command
 Keep this order, adapting the content to the project's learning concept:
 
 1. A title in the form `# Concept: one small experiment`.
-2. An opening paragraph naming the source files responsible for the main flow, request, and local checks.
+2. An opening paragraph explaining the concept and purpose in plain language, and naming the source files responsible for the main flow, request, and local checks.
 3. A small concept table, followed by an explanation of the shared instruction and what changes between runs.
-4. `## Execution flow`: a small top-to-bottom Mermaid flowchart showing the main steps, followed by a short explanation of how to read it.
+4. `## Execution flow`: a small top-to-bottom Mermaid flowchart showing the main steps, with a short explanation of how to read it and how important stages work.
 5. `## Run`: shared configuration, `dotnet run` from the project folder, Visual Studio execution, copied inputs, exact application request counts, remote API use, model requirements, and useful failure information.
-6. `## Learn by changing ...`: a short numbered exercise and guidance on interpreting the results.
-7. `## Tests`: the test files, checks performed, exact command, and number of real API requests.
+6. `## Understand the results`: explain the printed values, saved outputs, measurements, and check results that the learner needs before trying the exercises. For the shared library, explain helper return values and error messages.
+7. `## Learn by changing ...`: a short numbered exercise and guidance on interpreting the results.
 8. `## Files to read`: a text listing with a short purpose for each important file, including the shared helper and settings template.
-9. A final References line linking to relevant official documentation.
+9. `## Tests`: the test files, checks performed, exact command, and number of real API requests.
+10. A final References line linking to relevant official documentation.
 
 Write the execution chart in a fenced `mermaid` block using `flowchart TD`. Use plain action labels, arrows for execution order, and diamonds for important decisions or loops. Show the inputs, prompt or context preparation, model requests, local checks, and printed or saved outputs. Name the responsible source files where useful, keep request counts and call order accurate, and keep the chart aligned with the code when stages change. For the shared library, show how an application calls its helpers around the application's own request.
+
+Keep explanations beside the section they support. Explain stage rules, such as ranking or validation, in Execution flow. Explain output values and measurements in Understand the results, before exercises that use them. Keep Run focused on setup and execution, and avoid repeating the same explanation in several sections.
 
 When creating or modifying a README, write like a teacher explaining the experiment to a beginner:
 
