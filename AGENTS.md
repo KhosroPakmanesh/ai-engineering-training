@@ -102,13 +102,24 @@ Keep this order, adapting the content to the project's learning concept:
 1. A title in the form `# Concept: one small experiment`.
 2. An opening paragraph naming the source files responsible for the main flow, request, and local checks.
 3. A small concept table, followed by an explanation of the shared instruction and what changes between runs.
-4. `## Run`: shared configuration, `dotnet run` from the project folder, Visual Studio execution, copied inputs, exact application request counts, remote API use, model requirements, and useful failure information.
-5. `## Learn by changing ...`: a short numbered exercise and guidance on interpreting the results.
-6. `## Tests`: the test files, checks performed, exact command, and number of real API requests.
-7. `## Files to read`: a text listing with a short purpose for each important file, including the shared helper and settings template.
-8. A final References line linking to relevant official documentation.
+4. `## Execution flow`: a small top-to-bottom Mermaid flowchart showing the main steps, followed by a short explanation of how to read it.
+5. `## Run`: shared configuration, `dotnet run` from the project folder, Visual Studio execution, copied inputs, exact application request counts, remote API use, model requirements, and useful failure information.
+6. `## Learn by changing ...`: a short numbered exercise and guidance on interpreting the results.
+7. `## Tests`: the test files, checks performed, exact command, and number of real API requests.
+8. `## Files to read`: a text listing with a short purpose for each important file, including the shared helper and settings template.
+9. A final References line linking to relevant official documentation.
 
-Use the same concise teaching tone as the examples. Name the file responsible for each stage, keep commands simple, and describe the actual implementation and output. Link to shared/shared/OpenRouter.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
+Write the execution chart in a fenced `mermaid` block using `flowchart TD`. Use plain action labels, arrows for execution order, and diamonds for important decisions or loops. Show the inputs, prompt or context preparation, model requests, local checks, and printed or saved outputs. Name the responsible source files where useful, keep request counts and call order accurate, and keep the chart aligned with the code when stages change. For the shared library, show how an application calls its helpers around the application's own request.
+
+When creating or modifying a README, write like a teacher explaining the experiment to a beginner:
+
+- Explain what the concept means in plain language before discussing implementation details. Use a concrete example from the project's own sample data to make the idea easy to understand.
+- Describe what information enters the program, what happens in execution order, and what the learner should inspect in the printed or saved result. Name the responsible files as part of that explanation.
+- Use familiar words and short, direct sentences. Introduce technical terms only when they help the learner, and explain them when first used. Prefer a concrete action or observation over an abstract label.
+- For comparisons, explain what changes and what stays fixed. Connect the result to the lesson, and make clear which checks the code performs and which judgments the learner still makes.
+- When improving an existing README's language, preserve its headings, section order, concept table, exercises, commands, file list, and References line. Keep request counts, settings, paths, test descriptions, and implementation facts accurate.
+
+Keep commands simple and describe the actual implementation and output. Link to shared/shared/OpenRouter.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
 
 ## Check changes
 

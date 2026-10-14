@@ -1,19 +1,38 @@
 # Shared Plumbing: one small library
 
-Read **OpenRouter.cs** for the common settings reader, response checks, timeout, and API error messages. The three learning applications reference this library while keeping their actual model requests in their own experiment sources.
+This library holds the setup and checks that all three learning applications need. Read **OpenRouter.cs** to see how they load the same settings, check returned text, use a request deadline, and display API errors. Each lesson keeps its own prompts and actual model request in its experiment source.
 
 | Method or value | Purpose |
 | --- | --- |
-| ReadSettingsAsync and ParseSettings | Read the key and model from the build's .env file. |
-| ReadResponse | Reject empty or truncated responses and preserve valid text. |
-| RequestTimeoutSeconds | Give requests a common 120-second deadline. |
-| WriteError | Print provider details and useful failure guidance. |
+| ReadSettingsAsync and ParseSettings | Read your key and model from the copied .env file and check that both are filled in. |
+| ReadResponse | Return valid text unchanged; stop if the answer is empty or cut short. |
+| RequestTimeoutSeconds | Set the common 120-second request deadline. |
+| WriteError | Show the provider's error details and suggest what to check next. |
 
-Each application uses the same helpers. Prompts, generation settings, sample data, and lesson-specific checks stay in the learning projects.
+The learning applications call these helpers before and after their model requests. For example, all three read the same key and model settings, and all three reject an empty answer. Keeping these checks in one library means a common check can be maintained in one place. The prompts, sample data, generation settings, and checks that teach each lesson stay in that lesson's project.
+
+## Execution flow
+
+The flow starts when a learning application calls this library. The application sends its own model request and uses the shared helpers around that request.
+
+```mermaid
+flowchart TD
+    A["Learning application<br/>Calls ReadSettingsAsync"] --> B{"OpenRouter.cs<br/>Are the copied .env settings present and filled in?"}
+    B -->|Yes| C["Learning application<br/>Create its client with the common 120-second deadline"]
+    C --> D["Learning application<br/>Send its model request"]
+    D -->|Answer| E{"OpenRouter.cs<br/>Does ReadResponse accept this text?"}
+    E -->|Yes| F["Learning application<br/>Use the response in its own lesson"]
+    D -->|API error| G["OpenRouter.cs<br/>WriteError shows the API error and advice"]
+    G --> H["Learning application<br/>Stops with exit code 1"]
+    B -->|No| H
+    E -->|No| H
+```
+
+The library reads and checks settings, supplies the timeout value, and checks or explains responses. The model call belongs to the learning application. Building the library or running its own tests makes zero model requests.
 
 ## Run
 
-Install the .NET 10 SDK. Create `.env` in this folder from [.env.example](.env.example) and fill in the OpenRouter key and model. This is the repository's only source settings file, and Git ignores it.
+Install the .NET 10 SDK. Create `.env` in this folder from [.env.example](.env.example), then fill in your OpenRouter key and model. All learning projects use this one source settings file. Git ignores it so your credentials are not committed.
 
 From this folder, build the library:
 
@@ -21,21 +40,21 @@ From this folder, build the library:
 dotnet build
 ```
 
-shared.csproj copies `.env` to its output. Project references carry the same settings into the applications and their test outputs; rebuild after editing the source settings. The library has no console entry point. Run a learning application with `dotnet run` from that application's folder, or select it as the startup project in Visual Studio.
+shared.csproj copies `.env` into its build output folder. Because the applications and tests reference this library, they receive the same settings file in their output folders too. Rebuild after changing the source settings. This is a class library, so it has no console entry point to run on its own. To try a lesson, run `dotnet run` from that application's folder or select it as the startup project in Visual Studio.
 
-Building the library makes no model requests. Each application's README describes its request count, model requirements, and provider failures.
+Building this library makes no model requests. Each application's README tells you how many requests its experiment makes, which model features it needs, and how to understand failures.
 
 ## Learn by changing a check
 
-1. Read ParseSettings and predict how it handles comments, quotes, and equals signs in a value.
-2. Compare your prediction with [OpenRouterTests.cs](../shared.tests/OpenRouterTests.cs).
-3. Change a test input and run the shared tests. Observe which settings or responses are accepted.
+1. Read ParseSettings. Predict what it does with a comment line, a quoted model name, and an equals sign inside a value.
+2. Compare your prediction with [OpenRouterTests.cs](../shared.tests/OpenRouterTests.cs). These tests use made-up settings, so you can explore the parsing rules without a real API key.
+3. Change one test input and run the shared tests. Observe why the settings or response are accepted or rejected.
 
-ReadResponse returns valid text unchanged. Its checks protect the request flow; factual meaning still needs the lesson's own checks and manual review.
+ReadResponse checks whether an answer is present and complete. It returns valid text exactly as received. This does not check whether the facts are correct; each lesson has its own source checks, and you still review the answer's meaning yourself.
 
 ## Tests
 
-[shared.tests](../shared.tests/shared.tests.csproj) contains three deterministic cases in [OpenRouterTests.cs](../shared.tests/OpenRouterTests.cs). They check settings parsing, missing or placeholder settings, and empty or truncated responses. These checks run here rather than being copied into each lesson's test project.
+[shared.tests](../shared.tests/shared.tests.csproj) contains three local tests in [OpenRouterTests.cs](../shared.tests/OpenRouterTests.cs). They check how settings are read, reject missing values or unchanged placeholders, and reject empty or unfinished responses. They also check that valid response text is preserved. These common checks are tested here once for all the lessons.
 
 From the repository root, run:
 
@@ -43,7 +62,7 @@ From the repository root, run:
 dotnet test shared/shared.tests/shared.tests.csproj
 ```
 
-You can also use Visual Studio's Test Explorer. This run makes zero API requests and uses fictional settings strings.
+You can also use Visual Studio's Test Explorer. This test run makes **zero API requests**. It uses made-up settings and responses, so it can check the helpers without contacting a model.
 
 ## Files to read
 

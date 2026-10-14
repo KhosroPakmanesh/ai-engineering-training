@@ -1,15 +1,15 @@
 # ai-engineering-training
 
-Open [AIEngineeringTraining.slnx](AIEngineeringTraining.slnx) to load the projects.
+These small C#/.NET 10 experiments help you learn by changing an input and inspecting the AI's response. Open [AIEngineeringTraining.slnx](AIEngineeringTraining.slnx) to load the projects.
 
-- [Prompt engineering lab](01-prompt-engineering/prompt-engineering/README.md): compare three prompt styles using one fictional resume.
-- [Structured output lab](02-structured-output/structured-output/README.md): extract a CV into a typed JSON profile, then validate its schema, dates, and source evidence.
-- [Context engineering lab](03-context-engineering/context-engineering/README.md): compare full and selected project context for the same question, including prompt size, citations, and request timing.
+- [Prompt engineering](01-prompt-engineering/prompt-engineering/README.md): change the instructions given to the AI and compare three summaries of the same resume.
+- [Structured output](02-structured-output/structured-output/README.md): ask the AI to turn a resume into a JSON profile, then check its format and supporting facts.
+- [Context engineering](03-context-engineering/context-engineering/README.md): choose which project descriptions the AI receives and compare its answer with one based on all six descriptions.
 
-All applications reference the [shared class library](shared/shared/README.md). [OpenRouter.cs](shared/shared/OpenRouter.cs) handles configuration, response checks, request deadlines, and API errors. [OpenRouterTests.cs](shared/shared.tests/OpenRouterTests.cs) supplies three deterministic checks in the separate shared.tests project; these checks run once per solution test run.
+All three applications use the [shared class library](shared/shared/README.md) for their common setup and checks. [OpenRouter.cs](shared/shared/OpenRouter.cs) reads the settings, checks returned text, supplies the request deadline, and explains API errors. [OpenRouterTests.cs](shared/shared.tests/OpenRouterTests.cs) contains three local tests for these helpers. They run once per solution test run and make no AI requests.
 
-Create `shared/shared/.env` from [shared/shared/.env.example](shared/shared/.env.example) and fill in your OpenRouter key and model. This is the only source settings file. Builds copy it beside each executable and test assembly; rebuild after changing it. Run each application with `dotnet run` from its project folder.
+Create `shared/shared/.env` from [shared/shared/.env.example](shared/shared/.env.example) and fill in your OpenRouter key and model. Every application reads a copy of this same file from its build output folder. Rebuild after changing it. To try a lesson, open its project folder and run `dotnet run`.
 
-[AGENTS.md](AGENTS.md) explains how to add projects, reuse shared code and credentials, and keep every project README consistent with the existing examples.
+[AGENTS.md](AGENTS.md) explains how to add projects, share the setup code and settings, and write READMEs that teach each experiment in plain language.
 
-To create a project from a description, use the repository-local [create-learning-project skill](.agents/skills/create-learning-project/SKILL.md): `$create-learning-project`, followed by your project description. It follows the recorded guidance on cohesive files, meaningful methods, simple types, shared plumbing, and README structure.
+To create another learning project, use the repository-local [create-learning-project skill](.agents/skills/create-learning-project/SKILL.md): write `$create-learning-project`, followed by what you want the project to demonstrate. The skill follows AGENTS.md for the code, checks, and README.
