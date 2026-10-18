@@ -1,27 +1,39 @@
 using System.ClientModel;
 using System.Text.Json;
 
-// Change this to "resume-ambiguous.md" to explore missing facts and ambiguous dates.
-const string resumeFile = "resume.md";
+const string resumeFileName = "resume.md";
+const string resumeFile = $"SampleData/{resumeFileName}";
 
 try
 {
-    // Read the source before asking the agent to extract its facts.
     string folder = AppContext.BaseDirectory;
-    string resume = await ReadResumeAsync(folder, resumeFile);
 
-    // The lesson: CV -> agent's JSON -> schema and data checks -> typed profile.
-    string json = await CvExtractor.ExtractAsync(resume, resumeFile);
-    CandidateProfile profile = ProfileValidator.ParseAndValidate(json, resume, resumeFile);
+    // Read the copied resume regardless of the process's working directory.
+    string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folder, resumeFile));
 
-    // Present and save only a profile that passed the local checks.
-    await WriteProfileAsync(profile, folder);
+    // The model proposes a JSON profile; local checks decide whether to accept it.
+    string jsonResume = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
+
+    // Reject invalid JSON structure before converting it into typed records.
+    JsonResumeSchemaValidator.ValidateSchema(jsonResume);
+
+    CandidateProfile profile = ProfileExtractor.ExtractProfile(jsonResume);
+
+    // A well-shaped profile must still support its facts with exact source quotes.
+    ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);
+
+    // Clean up supported skill names only after the source checks pass.
+    profile = ProfileNormalizer.NormalizeProfile(profile);
+
+    JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    string formattedJson = JsonSerializer.Serialize(profile, jsonOptions);
+    Console.WriteLine(formattedJson);
+
     return 0;
 }
-// An unsuccessful extraction leaves the previously saved profile in place.
 catch (ClientResultException error)
 {
-    OpenRouter.WriteError(error);
+    AiProvider.WriteError(error);
     return 1;
 }
 catch (OperationCanceledException)
@@ -33,18 +45,4 @@ catch (Exception error)
 {
     Console.Error.WriteLine(error.Message);
     return 1;
-}
-
-// Copied input files make console and Visual Studio execution use the same source.
-static Task<string> ReadResumeAsync(string folder, string resumeFile) =>
-    File.ReadAllTextAsync(Path.Combine(folder, "sample-data", resumeFile));
-
-// Both destinations receive the same formatted, validated JSON.
-static async Task WriteProfileAsync(CandidateProfile profile, string folder)
-{
-    string formattedJson = JsonSerializer.Serialize(profile, ProfileValidator.JsonOptions);
-    Console.WriteLine(formattedJson);
-    string outputFile = Path.Combine(folder, "profile.json");
-    await File.WriteAllTextAsync(outputFile, formattedJson);
-    Console.WriteLine($"Saved validated profile: {outputFile}");
 }

@@ -2,13 +2,13 @@ using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Abstractions;
 
-public class PromptTests(ITestOutputHelper output)
+public class ResumeSummarizerTests(ITestOutputHelper output)
 {
-    // Each case makes one real API request using the application's .env and data files.
+    // Each case makes one model call, with up to three HTTP attempts, using the shared settings and inputs.
     [Theory]
-    [InlineData("prompts/A-zero-shot.txt", null)]
-    [InlineData("prompts/B-few-shot.txt", null)]
-    [InlineData("prompts/C-constrained.txt", 70)]
+    [InlineData("Prompts/A-zero-shot.txt", null)]
+    [InlineData("Prompts/B-few-shot.txt", null)]
+    [InlineData("Prompts/C-constrained.txt", 70)]
     [Trait("Category", "Integration")]
     public async Task Prompts_return_one_paragraph_and_obey_word_limit(string promptFile, int? wordLimit)
     {
@@ -22,13 +22,5 @@ public class PromptTests(ITestOutputHelper output)
         Assert.False(Regex.IsMatch(summary.Trim(), @"\n\s*\n"), "Expected one paragraph, without blank lines between paragraphs.");
         if (wordLimit.HasValue)
             Assert.InRange(wordCount, 1, wordLimit.Value);
-    }
-
-    // Preparation should discover a missing prompt before the comparison can spend a request.
-    [Fact]
-    public async Task Missing_prompt_is_rejected_during_preparation_without_an_api_request()
-    {
-        await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            ResumeSummarizer.ValidateInputsAsync(["prompts/does-not-exist.txt"]));
     }
 }

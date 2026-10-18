@@ -1,47 +1,94 @@
-using System.Text.Json;
-using Json.Schema;
+﻿using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
-// Coordinate JSON shape checks, source-data checks, and skill normalization.
 public static class ProfileValidator
 {
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static string _rawStringResume = string.Empty;
+    private static string _resumeFileName = string.Empty;
+    private static readonly List<string> errors = [];
 
-    // Keep the conversion from untrusted JSON to an accepted profile visible as three stages.
-    public static CandidateProfile ParseAndValidate(string json, string resume, string sourceFile)
+    // Check this profile independently and report all unsupported facts together.
+    public static void ValidateProfile(CandidateProfile profile, string rawStringResume, string resumeFileName)
     {
-        CheckSchema(json);
+        errors.Clear();
 
-        CandidateProfile profile = JsonSerializer.Deserialize<CandidateProfile>(json, JsonOptions)!;
-        new ProfileChecks(resume, sourceFile).Validate(profile);
+        _rawStringResume = rawStringResume;
+        _resumeFileName = resumeFileName;
 
-        return NormalizeSkills(profile);
+        CheckEvidence(profile.Evidence, "", profile.Name, profile.Email, profile.Phone);
+        CheckExperience(profile.Experience);
+        CheckEducation(profile.Education);
+        CheckSkills(profile.Skills);
+
+        if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
     }
-
-    // Shape comes first: malformed JSON, duplicate keys, missing fields, and wrong types fail here.
-    private static void CheckSchema(string json)
+    // Dates and durations need explicit support rather than inferred employment details.
+    private static void CheckExperience(List<Experience> experience)
     {
-        using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { AllowDuplicateProperties = false });
-        JsonSchema schema = JsonSchema.FromText(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
-        EvaluationResults evaluation = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
-        if (!evaluation.IsValid)
-            throw new InvalidDataException(string.Join(Environment.NewLine, SchemaErrors(evaluation)));
+        for (int index = 0; index < experience.Count; index++)
+        {
+            Experience item = experience[index];
+            string path = $"/experience/{index}";
+            CheckEvidence(item.Evidence, path, item.Employer, item.Role, item.StartDate, item.EndDate);
+            CheckDates(item.StartDate, item.EndDate, path);
+            if (item.DurationMonths is int months && !Regex.IsMatch(item.Evidence.Quote, $@"\b{months}\s+months?\b", RegexOptions.IgnoreCase))
+                errors.Add($"{path}/durationMonths: duration must be explicitly stated in months, or null.");
+        }
     }
-
-    // Schema failures retain their JSON paths so a learner can locate the offending field.
-    private static IEnumerable<string> SchemaErrors(EvaluationResults result)
+    // Qualifications and study dates must be present in each item's own evidence.
+    private static void CheckEducation(List<Education> education)
     {
-        if (result.Errors is not null)
-            foreach (var error in result.Errors)
-                yield return $"{(result.InstanceLocation.ToString() == "" ? "$" : result.InstanceLocation)}: {error.Value}";
-        if (result.Details is not null)
-            foreach (EvaluationResults detail in result.Details)
-                foreach (string error in SchemaErrors(detail)) yield return error;
+        for (int index = 0; index < education.Count; index++)
+        {
+            Education item = education[index];
+            string path = $"/education/{index}";
+            CheckEvidence(item.Evidence, path, item.Institution, item.Degree, item.FieldOfStudy, item.StartDate, item.EndDate);
+            CheckDates(item.StartDate, item.EndDate, path);
+        }
     }
-
-    // Keep the first skill's wording and evidence when names differ only by case or outer spaces.
-    private static CandidateProfile NormalizeSkills(CandidateProfile profile) => profile with
+    // Proficiency is a source fact, so an unstated level must remain null.
+    private static void CheckSkills(List<Skill> skills)
     {
-        Skills = profile.Skills.Select(skill => skill with { Name = skill.Name.Trim() })
-            .DistinctBy(skill => skill.Name, StringComparer.OrdinalIgnoreCase).ToArray()
-    };
+        for (int index = 0; index < skills.Count; index++)
+            CheckEvidence(skills[index].Evidence, $"/skills/{index}", skills[index].Name, skills[index].Proficiency);
+    }
+    // Require an exact source span containing every non-null fact for the item.
+    private static void CheckEvidence(Evidence evidence, string path, params List<string?> facts)
+    {
+        if (evidence.Source != _resumeFileName)
+            errors.Add($"{path}/evidence/source: expected the supplied CV filename.");
+        if (string.IsNullOrWhiteSpace(evidence.Quote) || !_rawStringResume.Contains(evidence.Quote, StringComparison.Ordinal))
+            errors.Add($"{path}/evidence/quote: expected an exact, nonempty span of the CV.");
+        foreach (string? fact in facts)
+            if (fact is not null && (string.IsNullOrWhiteSpace(fact) || !evidence.Quote.Contains(fact.Trim(), StringComparison.OrdinalIgnoreCase)))
+                errors.Add($"{path}/evidence/quote: an extracted fact is absent from its evidence.");
+    }
+    // Reject chronology only when every interpretation of the partial dates is reversed.
+    private static void CheckDates(string? start, string? end, string path)
+    {
+        var startRange = DateRange(start, path + "/startDate");
+        var endRange = DateRange(end, path + "/endDate");
+        if (startRange.HasValue && endRange.HasValue && endRange.Value.Max < startRange.Value.Min)
+            errors.Add($"{path}/endDate: end date precedes start date.");
+    }
+    // Compare date ranges without inventing a missing month or day in the profile.
+    private static (DateOnly Min, DateOnly Max)? DateRange(string? date, string path)
+    {
+        if (date is null) return null;
+        string fullDate = date.Length switch { 4 => date + "-01-01", 7 => date + "-01", _ => date };
+        if (!Regex.IsMatch(date, @"^\d{4}(-\d{2})?(-\d{2})?$") ||
+            !DateOnly.TryParseExact(fullDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly min))
+        {
+            errors.Add($"{path}: use a valid YYYY, YYYY-MM, or YYYY-MM-DD date, or null.");
+            return null;
+        }
+        DateOnly max = date.Length switch
+        {
+            4 => new(min.Year, 12, 31),
+            7 => new(min.Year, min.Month, DateTime.DaysInMonth(min.Year, min.Month)),
+            _ => min
+        };
+        return (min, max);
+    }
 }

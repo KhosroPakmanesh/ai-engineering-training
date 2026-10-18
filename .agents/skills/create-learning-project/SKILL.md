@@ -1,6 +1,6 @@
 ---
 name: create-learning-project
-description: Create a new C#/.NET AI engineering learning project in this repository from a user-provided description, following AGENTS.md, shared OpenRouter plumbing, and the existing README structure.
+description: Create a new C#/.NET AI engineering learning project in this repository from a user-provided description, following AGENTS.md, shared provider plumbing, and the existing README structure.
 ---
 
 # Create a learning project

@@ -9,18 +9,29 @@ Keep all repository rules in this file. The project creation skill is a short wo
 - During plumbing changes, preserve existing prompts, sample data, model settings, request counts, return types, successful console output, and exported JSON formats unless the user requests a change.
 - When adding a project, keep changes scoped to that project and the shared code, solution entries, and documentation it needs.
 - Run projects directly with dotnet run. Keep application execution free of command-line arguments and offline or simulated API modes.
-- For a comparison, state the variable being explored and keep all other inputs and settings fixed. For prompt comparisons, this includes the source data, model, and generation settings. Use independent conversations for each model call so earlier outputs do not affect later runs.
+- For a comparison, state the variable being explored and keep all other inputs and settings fixed. For prompt comparisons, this includes the source data, model, and generation settings. Use independent conversations for each model call so earlier outputs do not affect later runs. Load and validate every comparison case and prepare all prompts before the first model request, so a later input problem cannot waste earlier calls.
 - Use fictional sample data rich enough to demonstrate the lesson's constraints. For a summary limit, use source material longer than the permitted summary; choose its length for the lesson rather than applying a universal word count.
 - Remove files made obsolete or redundant by the current change. Do not keep backups of abandoned implementations in the project or remove unrelated work.
 
 ## Keep files, methods, and types cohesive
 
-- Give each file and class one clear responsibility. Keep closely related code together; split a file when its responsibilities need separate explanations.
-- Extract meaningful stages into cohesive, clearly named methods so a learner can follow the experiment without reading a large method that handles many responsibilities. Each method should do one thing; its name should explain the action.
-- Keep short, obvious operations inline when extracting them would add navigation without making the concept clearer.
-- Represent meaningful units of data and behavior with the simplest suitable construct: a record for related data, a static class for stateless operations, or a small instance class when state makes the concept easier to understand.
-- Use clear English names from the learning task, such as SelectContext or CheckEvidence. Prefer explicit inputs and results that make the data flow easy to follow.
-- Keep Program.cs and other orchestration methods as readable sequences of those stages. Keep routine configuration and error handling in shared/ so the learner can focus on the learning area.
+Use the manually refactored learning applications as examples of the preferred coding style. The [structured output flow](02-structured-output/structured-output/Program.cs) shows explicit processing stages, and the [selected context scoring](03-context-engineering/context-engineering/ContextStrategies/SelectedContextStrategy.cs) shows straightforward control flow. Apply the preferences below to new code and scoped changes; preserve unrelated existing code and behavior.
+
+- Give each file and class one clear responsibility. Prefer a focused class for a separately explainable lesson stage, such as input validation, context preparation, model requests, profile parsing, evidence validation, or normalization. Keep closely related details together within that responsibility.
+- Make Program.cs and other orchestration methods show the lesson's stages in execution order, with explicit intermediate results. Call loading, preparation, requests, validation, normalization, and presentation stages directly where they apply, rather than hiding the whole experiment behind one convenience method.
+- Keep separately meaningful checks and transformations visible as distinct calls. For structured output, show schema validation, conversion into records, evidence validation, and normalization in order. Preserve every check when separating stages; callers must complete the required sequence before accepting or presenting a result.
+- Keep stage contracts predictable: request methods return raw model output, parsers produce typed records, validators check data and report failures, and normalizers return transformed records. Do not silently trim, deduplicate, or repair data inside a validator.
+- Extract meaningful stages into cohesive, clearly named methods. Keep the related details of one operation together when they are easiest to understand in one pass, such as reading headings, constructing sections, and checking IDs during document parsing. Avoid splitting a cohesive operation into many tiny private helpers.
+- Keep short, obvious operations inline when extracting them would add navigation without making the concept clearer. A direct file read or a couple of console writes do not need their own wrapper unless it adds a meaningful responsibility.
+- Represent meaningful data passed between stages with named records and explicit inputs and results. Put records used by multiple stages in clearly named files; use a Types/ folder when it helps navigation. Closely related records may share a file, and implementation details used by only one class may remain private.
+- Use static classes for stateless operations. Keep per-call source text, errors, and other working state local, pass that state explicitly, or use a small instance created for one operation. Do not store an operation's mutable state in static fields.
+- Use clear English names from the learning task, such as SelectContext or CheckEvidence. Prefer descriptive variable names that identify the domain value or its representation, such as rawStringResume, jsonResume, comparisonInputs, preparedContexts, and comparisonReport, when shorter names would obscure the data flow. Name methods for the action and result they actually provide.
+- Prefer explicit C# types for meaningful intermediate results and stage boundaries so a learner can see what each step produces. Use var when the type is obvious from a local construction and it does not hide an important result type.
+- Prefer straightforward foreach loops and if/else branches when scoring or validation has several decisions. Use simple LINQ for clear filtering, projection, ordering, and deduplication; avoid nested conditional expressions or compressed expressions that make the rules harder to follow.
+- Default to List<T> for new collection properties, intermediate results, and collection inputs or outputs in the learning code. Do not convert a list to an array merely because construction is finished. Reuse an existing collection when it already represents the required result; avoid ToList() or collection spreading that merely copies an already suitable collection unless an independent copy is needed. Use IEnumerable<T> for enumeration-only inputs and other collection types when their semantics or a required API justify them. Preserve existing return types during unrelated changes.
+- Use named constructor arguments when a record or result has many fields, especially measurements and comparison reports. Keep short, obvious constructions positional when field meanings are easy to follow.
+- Represent visibly different experiment strategies with clearly named methods or classes so the caller states which behavior it selects. Keep the number of strategy classes proportional to the lesson; do not introduce an interface or hierarchy solely to separate two simple operations.
+- Keep routine configuration and error handling in shared/ so the explicit orchestration focuses on the learning area.
 - Order methods from overview to detail: put the entry point or main orchestration method first, arrange its helpers in call order, and place a helper used by only one method immediately below its caller. Put helpers shared by several methods after the main stages and keep related overloads together.
 - Keep constants, fields, and configuration at the top. When reordering existing methods, move each complete declaration with its comments without changing its signature, body, or calls; preserve field initializer order.
 - Add a layer, interface, generic helper, or dependency only when it has a clear purpose in the lesson. Keep the number of files and methods proportional to the concepts being taught.
@@ -33,7 +44,7 @@ Use the repository-local [create-learning-project skill](.agents/skills/create-l
 
 - Use the user's explicit project requirements to define the behavior. Identify the concept the learner should observe, the input they can change, and the output they should inspect.
 - Use existing conventions for unspecified routine details. Clarify missing information when it changes the learning objective or required behavior.
-- Before implementing, read the README and source of the existing project closest to the learning concept. Inspect [the solution](AIEngineeringTraining.slnx) and [shared tests](shared/shared.tests/OpenRouterTests.cs) alongside the shared plumbing described below.
+- Before implementing, read the README and source of the existing project closest to the learning concept. Inspect [the solution](AIEngineeringTraining.slnx) and [shared tests](shared/shared.tests/AiProviderTests.cs) alongside the shared plumbing described below.
 
 Example request: `$create-learning-project Implement a small project demonstrating tool calling with a fictional resume.`
 
@@ -41,19 +52,19 @@ Example request: `$create-learning-project Implement a small project demonstrati
 
 - shared/ is at the repository root, beside the numbered project folders.
 - Follow the same layout as the learning projects: shared/shared/ contains the class library and shared/shared.tests/ contains its xUnit tests.
-- Read shared/shared/OpenRouter.cs before adding settings parsing, response guards, timeout values, or provider error messages.
+- Read shared/shared/SettingsReader.cs before adding settings parsing, and shared/shared/AiProvider.cs before adding response guards, timeout values, or provider error messages.
 - Extend an existing shared helper when multiple projects need the same behavior. Do not copy shared code into individual project folders.
 - Keep lesson-specific prompts, data types, selection rules, schemas, and validation in their own project.
-- shared/shared.tests/OpenRouterTests.cs holds deterministic tests for the common helpers. Run these in shared.tests and extend them when changing shared behavior.
+- shared/shared.tests/ mirrors the shared source files: AiProviderTests.cs checks client setup and responses, SettingsReaderTests.cs checks configuration parsing, ProviderSettingsTests.cs checks safe descriptions, and AiRetryPolicyTests.cs checks retries through the SDK pipeline. Run these in shared.tests and extend the corresponding file when changing shared behavior.
 
 ## Use one credentials file
 
 - The only source configuration is shared/shared/.env. Create it from shared/shared/.env.example.
-- Use OPENROUTER_API_KEY and OPENROUTER_MODEL. Never create another project-local .env or hardcode credentials.
+- Select `AI_PROVIDER=openrouter` or `AI_PROVIDER=gemini`. Use OPENROUTER_API_KEY and OPENROUTER_MODEL for OpenRouter, or GEMINI_API_KEY and GEMINI_MODEL for direct Gemini access. Only the selected provider requires credentials. An absent AI_PROVIDER defaults to OpenRouter for existing settings files. Never create another project-local .env or hardcode credentials.
 - Never print credentials, include them in examples, or commit shared/shared/.env. It is ignored by Git.
-- shared.csproj copies its .env to build output; project references carry that file into each executable and test output. Read that copy through OpenRouter.ReadSettingsAsync(AppContext.BaseDirectory).
+- shared.csproj copies its .env to build output; project references carry that file into each executable and test output. Read that copy through SettingsReader.ReadSettingsAsync(AppContext.BaseDirectory).
 - Rebuild after editing shared/shared/.env. Preserve the selected model unless changing it is part of the user's request.
-- Requests send prompts and document excerpts to OpenRouter and its remote provider.
+- Requests send prompts and document excerpts to the selected remote service: OpenRouter and its upstream provider, or Google's Gemini API through its OpenAI-compatible endpoint.
 
 ## Add a new project
 
@@ -78,16 +89,23 @@ Use existing pinned package versions when suitable. Check official documentation
 </ItemGroup>
 ```
 
-6. Use OpenRouter.ReadSettingsAsync for configuration, OpenRouter.ReadResponse for empty/truncated response checks, OpenRouter.WriteError for API errors, and OpenRouter.RequestTimeoutSeconds for network and cancellation deadlines.
-7. Validate inputs before making API requests. Keep retries disabled and declare the output limit in the experiment source.
+6. Use SettingsReader.ReadSettingsAsync for configuration, AiProvider.CreateChatClient for SDK client setup, AiProvider.ReadResponse for empty/truncated response checks, AiProvider.WriteError for API errors, and AiProvider.RequestTimeoutSeconds for network and cancellation deadlines. Keep prompts, generation settings, and actual SDK or Agent Framework requests in the lesson. Apply provider-specific request options only to the relevant provider; never silently change a lesson's settings or route a failed request to another provider.
+7. Validate inputs before making API requests and declare the output limit in the experiment source. Use the shared AiRetryPolicy for at most two HTTP retries on 408, 429, 500, 502, 503, or 504. Keep the 120-second call deadline around all attempts and waits. Do not add another retry loop around an agent run. Document model calls separately from maximum HTTP attempts.
 8. When tests are requested, follow the testing guidance below.
 9. Follow the README format below.
 10. Follow the verification guidance under Check changes.
 
 ## Keep tests small and meaningful
 
-- Use a small test project with as few cohesive test source files as practical. Split them when responsibilities need separate explanations.
+- Keep the suite focused on lesson requirements and failures that affect correctness, evidence, request costs, or important limits. Cover useful successful results and representative failures; do not pursue exhaustive input combinations or line coverage.
+- For each production file with meaningful tests, create a counterpart named <source-file-name>Tests.cs in the test project and mirror its relative folder path. For example, ContextStrategies/SelectedContextStrategy.cs maps to context-engineering.tests/ContextStrategies/SelectedContextStrategyTests.cs. Match the test class name to its file and keep its assertions focused on that production file's behavior. Do not collect unrelated component tests in a project-wide test file.
+- Choose which behavior needs testing before creating test files. Records with no behavior, trivial wrappers, console wording, and private helpers do not each need a test or an empty counterpart file. Exercise private helpers through observable behavior.
+- Keep small shared fixture readers in TestData/ when several counterpart files need the same copied inputs. Return fresh test data and avoid building a general test framework.
 - Let integration tests call the same request method as the application and use the existing shared settings and project inputs. Mark them with Trait("Category", "Integration"). Use deterministic tests for local checks.
+- Put integration tests in the counterpart file for the request or orchestration owner, such as CvExtractorTests.cs or ContextComparerTests.cs. Check the complete required pipeline there without duplicating a test file for every collaborator it calls.
+- When an application exposes preparation, validation, and normalization as separate stages, let integration tests follow the same required sequence. Keep deterministic tests focused on the stage or observable constraint they exercise.
+- Strengthen an existing test when an important assertion is missing; add a new case for a distinct behavior. For controlled comparisons, assert each prepared prompt contains the original question, not just that both prompts agree with each other.
+- Keep counterpart test classes independent. If an existing dependency has shared mutable state, put its test callers in the same xUnit collection until that dependency is made independent; do not disable parallel execution for unrelated tests.
 - Assert observable requirements, such as nonempty results, output structure, paragraph or word limits, and evidence references required by the lesson. Avoid exact wording assertions for variable model responses unless exact wording is an explicit contract.
 - Leave qualitative judgments, such as factual meaning and useful fact selection, as manual learning exercises unless automated evaluation is requested.
 
@@ -122,7 +140,7 @@ When creating or modifying a README, write like a teacher explaining the experim
 - For comparisons, explain what changes and what stays fixed. Connect the result to the lesson, and make clear which checks the code performs and which judgments the learner still makes.
 - When improving an existing README's language, preserve its headings, section order, concept table, exercises, commands, file list, and References line. Keep request counts, settings, paths, test descriptions, and implementation facts accurate.
 
-Keep commands simple and describe the actual implementation and output. Link to shared/shared/OpenRouter.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
+Keep commands simple and describe the actual implementation and output. Link to shared/shared/AiProvider.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
 
 ## Check changes
 
@@ -131,5 +149,6 @@ Keep commands simple and describe the actual implementation and output. Link to 
 - A full dotnet test AIEngineeringTraining.slnx run makes real API calls. Read each project's README for its request count.
 - Run the appropriate checks for the changed files, including existing checks affected by shared changes. Distinguish provider availability or model constraint failures from code defects.
 - Review the source from a learner's perspective: the experiment stages, meaningful data types, actual request, and local checks should be easy to find and follow.
+- When moving or renaming stages, update application callers, tests, README execution charts, and file lists together. Verify that the explicit flow still performs every required check and preserves the requested outputs.
 - Check README links and git diff --check. Verify shared/shared/.env remains ignored.
 - When delivering a project, name the implemented files, briefly explain the concept, give the run command, and report verification results and any remaining limitations accurately.
