@@ -11,7 +11,7 @@ For the default question, `Which project used PostgreSQL?`, FULL supplies projec
 
 ## Execution flow
 
-Follow the arrows from top to bottom. Program.cs checks the question, calls ComparisonInputsLoader.cs to load the source files, and asks ContextCreator.cs to prepare both prompts. ProjectSectionParser.cs parses the document into sections, each with an ID, heading, and complete text. The two preparation calls are beside each other in `CreateContextStrategies`: FULL keeps every section, and SELECTED ranks and chooses matching sections. Both prompts are checked before Program.cs calls `CompareContextAsync` in ContextComparer.cs. That method creates the agent, sends FULL first and SELECTED second, and returns the report. Each call uses an independent conversation with the same question, instructions, model, and settings.
+Follow the arrows from top to bottom. Program.cs checks the question, calls ComparisonInputsLoader.cs to load the source files, and asks ContextCreator.cs to prepare both prompts. ProjectSectionParser.cs parses the document into sections, each with an ID, heading, and complete text. The two preparation calls are beside each other in `CreateContextStrategies`: FULL keeps every section, and SELECTED ranks and chooses matching sections. Both prompts are checked before Program.cs calls `CompareContextAsync` in ContextComparer.cs. For each context, that method declares an `AiRequest` with the instructions, prompt, and generation settings, then calls `AiProvider.RequestAsync`. It sends FULL first and SELECTED second and returns the report. Each call uses an independent conversation with the same question, instructions, model, and settings.
 
 ```mermaid
 flowchart TD
@@ -19,9 +19,9 @@ flowchart TD
     B --> C["FullContextStrategy.cs<br/>Prepare FULL with all descriptions"]
     C --> S["SelectedContextStrategy.cs<br/>Rank and choose descriptions for SELECTED"]
     S --> D["ContextCreator.cs<br/>Build and size-check both prompts"]
-    D --> E["SettingsReader.cs + AiProvider.cs + ContextComparer.cs<br/>Read settings and create the agent"]
-    E --> F["ContextComparer.cs<br/>Send FULL request; check and measure its answer"]
-    F --> G["ContextComparer.cs<br/>Send SELECTED request; check and measure its answer"]
+    D --> E["SettingsReader.cs + ContextComparer.cs<br/>Read settings for both requests"]
+    E --> F["ContextComparer.cs + AiProvider.cs<br/>Call RequestAsync for FULL; check its evidence"]
+    F --> G["ContextComparer.cs + AiProvider.cs<br/>Call RequestAsync for SELECTED; check its evidence"]
     G --> H["Program.cs<br/>Print both results and save comparison.json"]
     H --> I{"Any evidence flags?"}
     I -->|No| J["Exit 0"]
@@ -32,7 +32,7 @@ FullContextStrategy.cs keeps all sections in their original document order. Sele
 
 Ranking helps SELECTED choose the descriptions most likely to contain the answer. When several match, it gives the strongest matches priority within the two-description limit. SelectedContextStrategy.cs keeps the keyword and ranking rules together. It ignores common question words such as `which` and `project`. Each remaining distinct word scores 3 points for a heading match, otherwise 1 point for a match in the description. The code adds each project's points and selects up to two with positive scores, highest first. For `Which project used PostgreSQL?`, P1 ranks highest because PostgreSQL appears in its heading. Equal scores follow the original document order. If no words match, SELECTED contains no descriptions. This is local word matching and makes no extra model requests.
 
-For each answer, AiProvider.cs rejects empty or cut-short text, and ContextEvidenceChecker.cs checks citations and quotes. ContextComparer.cs keeps the answer with its measurements and any evidence flags. Flags allow the comparison to continue and are saved in the report. A missing input, oversized prompt, API error, or unusable response stops the flow before that final save.
+For each answer, AiProvider.cs rejects empty or cut-short text and returns the answer, token usage, and request duration in an `AiResponse`. ContextEvidenceChecker.cs checks citations and quotes. ContextComparer.cs keeps the answer with its measurements and any evidence flags. Flags allow the comparison to continue and are saved in the report. A missing input, oversized prompt, API error, or unusable response stops the flow before that final save.
 
 The [shared retry policy](../../shared/shared/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside each agent call. It keeps the same context and settings; it does not restart the comparison or repeat a completed context strategy.
 
@@ -48,7 +48,7 @@ dotnet run
 
 You can also run the project in Visual Studio. Set `context-engineering` as the startup project. A build copies the project descriptions, practice questions with their expected source IDs, and shared settings into the folder containing the executable. The program reads those copies. Edit the original project files and rebuild to try your changes. The first build downloads the packages if needed. You can also run `dotnet restore` and `dotnet build` separately from this folder; these commands work in Windows PowerShell and on macOS/Linux.
 
-[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file, and [AiProvider.cs](../../shared/shared/AiProvider.cs) creates the SDK client; Git ignores your `.env` file. ContextComparer.cs prints the selected model and provider. Each run makes **two model calls**, one for FULL and one for SELECTED: normally two real HTTP requests and at most **six HTTP attempts** with retries. They send the fictional project text to the selected AI provider and may charge your account. Temperature controls variation in the generated text; it stays at 0.2 for both calls. Each allows up to 4,096 output tokens and has a 120-second total deadline, including retry waits and attempts.
+[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file, and the facade in [AiProvider.cs](../../shared/shared/AiProvider.cs) sends the model requests; Git ignores your `.env` file. Changing the selected provider or model requires no lesson code changes. ContextComparer.cs prints the selected model and provider. Each run makes **two model calls**, one for FULL and one for SELECTED: normally two real HTTP requests and at most **six HTTP attempts** with retries. They send the fictional project text to the selected AI provider and may charge your account. Temperature controls variation in the generated text; it stays at 0.2 for both calls. Each allows up to 4,096 output tokens and has a 120-second total deadline, including retry waits and attempts.
 
 Choose a model and provider that support Chat Completions, temperature, and the output token limit. If a request fails, the program prints the HTTP status and provider error message. HTTP 429 means the provider is limiting requests, has no remaining quota, or is too busy. Wait and try again, or check the quota and model in `shared/shared/.env`. After changing that file, stop any running debugging session and rebuild to copy the new settings.
 
@@ -81,7 +81,7 @@ ContextCreator.cs                             Context text, prompt packaging, an
 ContextCreatorHelpers.cs                      Shared instruction, uncertainty response, and limits
 ContextStrategies/FullContextStrategy.cs       All project sections in document order
 ContextStrategies/SelectedContextStrategy.cs   Question keywords, ranking, and selected sections
-ContextComparer.cs                            Agent requests and comparison measurements
+ContextComparer.cs                            Request inputs, facade calls, and comparison measurements
 ContextEvidenceChecker.cs                     Citation and exact-quotation checks
 Types/ComparisonInputs.cs                     Question, source sections, and expected IDs
 Types/ContextStrategy.cs                      Strategy name, included sections, and context text
@@ -89,18 +89,21 @@ Types/PreparedContext.cs                      Context paired with its complete u
 Types/ProjectSection.cs                       Parsed source ID, heading, and original text
 Types/ComparisonReport.cs                     Fixture and exported report records
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
-../../shared/shared/AiProvider.cs             Shared provider setup, response checks, and API errors
+../../shared/shared/AiProvider.cs             Shared model-call facade, deadlines, checks, and API errors
+../../shared/shared/AiRequest.cs              Request inputs and optional JSON schema
+../../shared/shared/AiResponse.cs             Checked text, token usage, and request timing
+../../shared/shared/AiRequestException.cs     API failures independent of SDK exception types
 ../../shared/shared/AiRetryPolicy.cs          Shared HTTP retries and retry messages
 ../../shared/shared/ProviderSettings.cs       Selected provider connection values
-../../shared/shared.tests/AiProviderTests.cs  Shared client setup and response checks
+../../shared/shared.tests/AiProviderTests.cs  Shared facade request and response checks
 ../../shared/shared/.env                      Provider selection, keys, and models
 ../../shared/shared/.env.example              Template for creating the shared settings
 SampleData/projects.md                       Six fictional project records
 SampleData/questions.json                    Expected source IDs and an unsupported question
-context-engineering.csproj                    .NET 10 project and pinned package dependencies
+context-engineering.csproj                    .NET 10 project, copied inputs, and shared reference
 ```
 
-Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RunContextAsync` sends one request, and `CreateResult` names each measurement beside its value. Use the console output and saved report to compare the answers, input sizes, and timings. The pinned packages are `OpenAI` 2.14.0, `Microsoft.Extensions.AI.OpenAI` 10.11.0, and `Microsoft.Agents.AI` 1.25.0. Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
+Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RunContextAsync` sends one request through the facade, and `CreateResult` names each measurement beside its value. Use the console output and saved report to compare the answers, input sizes, and timings. AI dependencies are pinned in [shared.csproj](../../shared/shared/shared.csproj). Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
 
 ## Tests
 

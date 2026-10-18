@@ -1,4 +1,3 @@
-using System.ClientModel;
 using System.Text.Json;
 
 const string resumeFileName = "resume.md";
@@ -8,21 +7,21 @@ try
 {
     string folder = AppContext.BaseDirectory;
 
-    // Read the copied resume regardless of the process's working directory.
+    // Read the resume beside the executable so the launch folder does not matter.
     string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folder, resumeFile));
 
     // The model proposes a JSON profile; local checks decide whether to accept it.
     string jsonResume = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
 
-    // Reject invalid JSON structure before converting it into typed records.
+    // Check JSON field names and value types before creating profile records.
     JsonResumeSchemaValidator.ValidateSchema(jsonResume);
 
     CandidateProfile profile = ProfileExtractor.ExtractProfile(jsonResume);
 
-    // A well-shaped profile must still support its facts with exact source quotes.
+    // Correct JSON structure is not enough: each fact also needs an exact quote from the resume.
     ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);
 
-    // Clean up supported skill names only after the source checks pass.
+    // Trim skill names and remove duplicates only after their evidence has passed the checks.
     profile = ProfileNormalizer.NormalizeProfile(profile);
 
     JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -31,7 +30,7 @@ try
 
     return 0;
 }
-catch (ClientResultException error)
+catch (AiRequestException error)
 {
     AiProvider.WriteError(error);
     return 1;

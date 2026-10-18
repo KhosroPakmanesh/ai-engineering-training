@@ -1,5 +1,3 @@
-using System.ClientModel;
-
 const string question = "Which project used PostgreSQL?";
 const string sourceFile = "projects.md";
 
@@ -9,7 +7,7 @@ try
     if (string.IsNullOrWhiteSpace(question) || question.Length > 500)
         throw new ArgumentException("The question must contain between 1 and 500 characters.", nameof(question));
 
-    // Expected source IDs measure whether each context includes the needed evidence.
+    // Expected project IDs let us check whether each context includes the project needed to answer.
     ComparisonInputs comparisonInputs = await ComparisonInputsLoader
         .LoadComparisonInputsAsync(question, sourceFile);
 
@@ -21,7 +19,7 @@ try
     ComparisonReport comparisonReport = await ContextComparer.
         CompareContextAsync(sourceFile,comparisonInputs, preparedContexts);
 
-    // Keep the answers beside their prompt sizes, timing, and local evidence flags.
+    // Show each answer with its prompt size, request time, and any failed evidence checks.
     Console.WriteLine($"Question: {comparisonReport.Question}");
     foreach (ContextResult result in comparisonReport.Results)
     {
@@ -38,7 +36,7 @@ try
 
     return comparisonReport.Results.All(result => result.EvidenceFlags.Count == 0) ? 0 : 1;
 }
-catch (ClientResultException error)
+catch (AiRequestException error)
 {
     AiProvider.WriteError(error);
     return 1;

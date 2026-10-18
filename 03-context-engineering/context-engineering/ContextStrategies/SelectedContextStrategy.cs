@@ -8,7 +8,7 @@ public static class SelectedContextStrategy
         StringComparer.OrdinalIgnoreCase);
     public const string StrategyDescription = "Distinct keyword matches: heading=3, body=1; ties use document order; take up to two sections with a positive score.";
 
-    // Choose likely evidence locally without spending another model request.
+    // Choose projects by matching question words, without making another model call.
     public static ContextStrategy Prepare(List<ProjectSection> sections, string question,
         int characterCap = ContextCreatorHelpers.ContextCharacterCap)
     {
@@ -17,7 +17,7 @@ public static class SelectedContextStrategy
         List<ProjectSection> included = RankSections(sections, keywords);
         return ContextCreator.CreateContext(included, "SELECTED", characterCap);
     }
-    // Stronger matches come first; source order breaks ties within the section limit.
+    // Take the highest-scoring sections; keep document order when scores are equal.
     private static List<ProjectSection> RankSections(List<ProjectSection> sections, List<string> keywords) => sections
         .Select((section, index) => new { Section = section, Index = index, Score = ScoreSection(section, keywords) })
         .Where(item => item.Score > 0)
@@ -26,7 +26,7 @@ public static class SelectedContextStrategy
         .Take(SelectedSectionLimit)
         .Select(item => item.Section)
         .ToList();
-    // A heading match is stronger than a body match, and repeated words add no weight.
+    // Give 3 points for a heading match, otherwise 1 for a text match; count each keyword once.
     private static int ScoreSection(ProjectSection section, List<string> keywords)
     {
         int score = 0;
@@ -37,7 +37,7 @@ public static class SelectedContextStrategy
         }
         return score;
     }
-    // Match distinct words without allowing case or punctuation to change their score.
+    // Ignore letter case and punctuation, and count repeated words only once.
     private static HashSet<string> Words(string text) => Regex.Matches(text.ToLowerInvariant(), @"[a-z0-9]+")
         .Select(match => match.Value).ToHashSet(StringComparer.Ordinal);
 }

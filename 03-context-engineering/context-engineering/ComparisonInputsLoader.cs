@@ -3,7 +3,7 @@ using System.Text.Json;
 
 public static class ComparisonInputsLoader
 {
-    // Load the same copied project text and expected source IDs for runs and tests.
+    // Use the same project text and expected project IDs in console runs and tests.
     public static async Task<ComparisonInputs> LoadComparisonInputsAsync(
         string question, string sourceFile, CancellationToken cancellationToken = default)
     {

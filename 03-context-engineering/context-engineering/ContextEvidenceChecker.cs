@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 public static class ContextEvidenceChecker
 {
-    // Check source references locally while leaving factual meaning for the learner to judge.
+    // Check project IDs and quotes in code; the learner still decides whether they support the answer.
     public static List<string> CheckEvidence(string answer, List<ProjectSection> included, List<string>? expectedIds = null)
     {
         if (answer.Trim() == ContextCreatorHelpers.UncertaintyResponse)
@@ -18,10 +18,10 @@ public static class ContextEvidenceChecker
         CheckCitations(cited, quotes, included, flags);
         return flags;
     }
-    // Accept both bracket styles while checking each distinct citation only once.
+    // Accept references such as [P1] and 【P1】, and return each project ID once.
     public static List<string> CitedIds(string answer) => Regex.Matches(answer, @"\[(?<id>P\d+)\]|【(?<id>P\d+)】")
         .Select(match => match.Groups["id"].Value).Distinct(StringComparer.Ordinal).ToList();
-    // Straight and curly quotation marks both delimit potential source evidence.
+    // Read quoted text between either straight or curly quotation marks.
     private static List<string> ReadQuotes(string answer) => Regex.Matches(answer, "[\"“](?<quote>[^\"”]+)[\"”]")
         .Select(match => match.Groups["quote"].Value).ToList();
     // A citation needs both a supplied source and an exact quote from that source.

@@ -17,7 +17,7 @@ public class ResumeSummarizerTests(ITestOutputHelper output)
         output.WriteLine(summary);
         output.WriteLine($"Word count: {wordCount}");
 
-        // Assert observable constraints rather than one expected model wording.
+        // Check paragraph and word limits because the model can choose different wording.
         Assert.False(string.IsNullOrWhiteSpace(summary), "Expected a nonempty summary.");
         Assert.False(Regex.IsMatch(summary.Trim(), @"\n\s*\n"), "Expected one paragraph, without blank lines between paragraphs.");
         if (wordLimit.HasValue)

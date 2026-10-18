@@ -1,10 +1,10 @@
 using Xunit;
 
-// These tests share ProfileValidator static state with the other validation callers.
+// Run these classes one at a time because ProfileValidator stores shared data.
 [Collection("Profile validation")]
 public class ProfileExtractorTests
 {
-    // A known valid profile exercises the complete local acceptance flow.
+    // A valid example must pass JSON checks, record conversion, evidence checks, and skill cleanup.
     [Fact]
     public void Example_can_be_parsed_into_records()
     {

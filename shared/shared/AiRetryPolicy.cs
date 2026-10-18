@@ -1,11 +1,11 @@
 using System.ClientModel.Primitives;
 
-// Retry HTTP requests inside the SDK so an agent run is not restarted.
+// Retry only the failed HTTP request, without starting the whole agent call again.
 public class AiRetryPolicy() : ClientRetryPolicy(MaxRetries)
 {
     public const int MaxRetries = 2;
 
-    // Configuration errors and canceled calls cannot be repaired by another attempt.
+    // Try again only for temporary HTTP failures; stop when the caller cancels.
     protected override bool ShouldRetry(PipelineMessage message, Exception? exception)
     {
         message.CancellationToken.ThrowIfCancellationRequested();
@@ -14,7 +14,7 @@ public class AiRetryPolicy() : ClientRetryPolicy(MaxRetries)
             base.ShouldRetry(message, exception);
     }
 
-    // The SDK reads Retry-After; wait at least that long before adding a little jitter.
+    // Honor the provider's requested wait, then add a small random delay to spread out retries.
     protected override TimeSpan GetNextDelay(PipelineMessage message, int tryCount)
     {
         TimeSpan delay = TimeSpan.FromSeconds(Math.Pow(2, tryCount));

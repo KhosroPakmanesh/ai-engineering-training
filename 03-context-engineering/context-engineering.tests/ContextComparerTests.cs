@@ -7,7 +7,7 @@ public class ContextComparerTests(ITestOutputHelper output)
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    // Four real requests to the selected provider, through the same method Program.cs uses.
+    // Each case makes two model calls; both cases make four, with up to twelve HTTP attempts.
     [Theory]
     [InlineData("Which project used PostgreSQL?", false)]
     [InlineData("Which project used Salesforce?", true)]
@@ -20,14 +20,14 @@ public class ContextComparerTests(ITestOutputHelper output)
         ComparisonReport report = await ContextComparer.CompareContextAsync(sourceFile, inputs, preparedContexts);
         output.WriteLine(JsonSerializer.Serialize(report, JsonOptions));
 
-        // Inspect each result with the same constraints, then compare the prompt sizes.
+        // Apply the same checks to both answers, then compare their prompt sizes.
         Assert.Equal(["FULL", "SELECTED"], report.Results.Select(result => result.Strategy));
         foreach (ContextResult result in report.Results)
             AssertComparisonResult(result, report, unknown);
         Assert.True(report.Results[1].PromptCharacters < report.Results[0].PromptCharacters);
     }
 
-    // Evidence requirements depend on whether the supplied source can answer the fixture question.
+    // Expect supporting project IDs when an answer is available, or the uncertainty message when it is not.
     private static void AssertComparisonResult(ContextResult result, ComparisonReport report, bool unknown)
     {
         Assert.False(string.IsNullOrWhiteSpace(result.Response));

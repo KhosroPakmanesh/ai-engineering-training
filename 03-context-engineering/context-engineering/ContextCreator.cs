@@ -2,7 +2,7 @@
 
 public static class ContextCreator
 {
-    // Prepare both context choices together so neither request precedes prompt checks.
+    // Prepare and check both prompts before making either model call.
     public static List<PreparedContext> CreateContextStrategies(ComparisonInputs inputs)
     {
         List<ContextStrategy> contexts =
@@ -13,7 +13,7 @@ public static class ContextCreator
 
         return PrepareContext(contexts, inputs.Question);
     }
-    // Reject oversized prompts instead of silently changing the supplied evidence.
+    // Stop if a prompt is too long; do not remove source text to make it fit.
     private static List<PreparedContext> PrepareContext(List<ContextStrategy> selectedContext, string question)
     {
         List<PreparedContext> preparedContext = selectedContext
@@ -29,7 +29,7 @@ public static class ContextCreator
 
         return preparedContext;
     }
-    // Package the question and unchanged section text as data for the shared instruction.
+    // Put the question and original project text in JSON so the model receives them as data.
     private static string BuildContext(string question, ContextStrategy context)
     {
         JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -46,7 +46,7 @@ public static class ContextCreator
         }, jsonOptions);
     }
 
-    // Both strategies preserve complete source sections and enforce the same size cap.
+    // Keep each selected section whole and stop if the combined text exceeds the limit.
     public static ContextStrategy CreateContext(List<ProjectSection> included, string strategy, int characterCap)
     {
         string context = string.Join("\n\n", included.Select(section => section.Text));

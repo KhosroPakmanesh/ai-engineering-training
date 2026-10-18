@@ -1,6 +1,6 @@
 internal static class ProfileTestData
 {
-    // Each test receives fresh records, so changes to a fixture cannot affect another test.
+    // Give each test its own profile so changing it cannot affect another test.
     public static CandidateProfile ReadExample() =>
         ProfileExtractor.ExtractProfile(ReadSample("profile.example.json"));
 

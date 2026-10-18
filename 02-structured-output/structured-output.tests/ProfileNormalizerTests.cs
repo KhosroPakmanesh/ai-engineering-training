@@ -2,7 +2,7 @@ using Xunit;
 
 public class ProfileNormalizerTests
 {
-    // Cleanup keeps the first supported skill and its evidence while removing duplicates.
+    // Remove duplicate skills while keeping the first entry and its resume quote.
     [Fact]
     public void Skill_normalization_trims_names_and_keeps_the_first_duplicate()
     {

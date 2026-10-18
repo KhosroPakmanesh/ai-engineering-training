@@ -2,7 +2,7 @@ using Xunit;
 
 public class ProviderSettingsTests
 {
-    // Useful settings diagnostics must not disclose the selected API key.
+    // Describing the settings must not print the API key.
     [Fact]
     public void Settings_description_does_not_expose_credentials()
     {

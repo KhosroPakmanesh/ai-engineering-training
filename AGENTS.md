@@ -5,7 +5,7 @@ Keep all repository rules in this file. The project creation skill is a short wo
 ## Keep the learning goal visible
 
 - The learning projects are small C#/.NET 10 console applications; shared is their common class library. Start by reading the project's README and source files.
-- Keep the actual SDK or Agent Framework request, prompts, and generation settings visible in the experiment's own source file.
+- Keep the AiProvider.RequestAsync call, prompts, and generation settings visible in the experiment's own source file. Keep SDK clients, agents, provider-specific options, and SDK response types behind the shared facade.
 - During plumbing changes, preserve existing prompts, sample data, model settings, request counts, return types, successful console output, and exported JSON formats unless the user requests a change.
 - When adding a project, keep changes scoped to that project and the shared code, solution entries, and documentation it needs.
 - Run projects directly with dotnet run. Keep application execution free of command-line arguments and offline or simulated API modes.
@@ -36,6 +36,7 @@ Use the manually refactored learning applications as examples of the preferred c
 - Keep constants, fields, and configuration at the top. When reordering existing methods, move each complete declaration with its comments without changing its signature, body, or calls; preserve field initializer order.
 - Add a layer, interface, generic helper, or dependency only when it has a clear purpose in the lesson. Keep the number of files and methods proportional to the concepts being taught.
 - Add a brief comment before each meaningful stage or method to explain its purpose, the lesson, or a non-obvious decision. Comments explain why; method names explain what. Keep obvious statements readable without repeating them in comments.
+- Write comments for a beginner, using short sentences and familiar words. Explain the reason or rule in concrete terms from the project: prefer "an exact quote from the resume" to "a source span." Explain a technical term briefly when it is needed. Keep comments accurate about the code's behavior, limits, and model-call counts, and update them when the code changes. Apply this to application code, shared helpers, and tests.
 - Apply these conventions throughout the learning applications, shared library, and tests. Organize the code so learners can understand the main flow without first learning a plumbing framework.
 
 ## Create a project from a description
@@ -52,10 +53,10 @@ Example request: `$create-learning-project Implement a small project demonstrati
 
 - shared/ is at the repository root, beside the numbered project folders.
 - Follow the same layout as the learning projects: shared/shared/ contains the class library and shared/shared.tests/ contains its xUnit tests.
-- Read shared/shared/SettingsReader.cs before adding settings parsing, and shared/shared/AiProvider.cs before adding response guards, timeout values, or provider error messages.
+- Read shared/shared/SettingsReader.cs before adding settings parsing, and shared/shared/AiProvider.cs before adding model calls, provider options, response guards, timeout values, or provider error messages.
 - Extend an existing shared helper when multiple projects need the same behavior. Do not copy shared code into individual project folders.
 - Keep lesson-specific prompts, data types, selection rules, schemas, and validation in their own project.
-- shared/shared.tests/ mirrors the shared source files: AiProviderTests.cs checks client setup and responses, SettingsReaderTests.cs checks configuration parsing, ProviderSettingsTests.cs checks safe descriptions, and AiRetryPolicyTests.cs checks retries through the SDK pipeline. Run these in shared.tests and extend the corresponding file when changing shared behavior.
+- shared/shared.tests/ mirrors the shared source files: AiProviderTests.cs checks facade requests, provider options, independent calls, responses, API errors, and cancellation; SettingsReaderTests.cs checks configuration parsing; ProviderSettingsTests.cs checks safe descriptions; and AiRetryPolicyTests.cs checks retries through the SDK pipeline. Run these in shared.tests and extend the corresponding file when changing shared behavior.
 
 ## Use one credentials file
 
@@ -89,8 +90,8 @@ Use existing pinned package versions when suitable. Check official documentation
 </ItemGroup>
 ```
 
-6. Use SettingsReader.ReadSettingsAsync for configuration, AiProvider.CreateChatClient for SDK client setup, AiProvider.ReadResponse for empty/truncated response checks, AiProvider.WriteError for API errors, and AiProvider.RequestTimeoutSeconds for network and cancellation deadlines. Keep prompts, generation settings, and actual SDK or Agent Framework requests in the lesson. Apply provider-specific request options only to the relevant provider; never silently change a lesson's settings or route a failed request to another provider.
-7. Validate inputs before making API requests and declare the output limit in the experiment source. Use the shared AiRetryPolicy for at most two HTTP retries on 408, 429, 500, 502, 503, or 504. Keep the 120-second call deadline around all attempts and waits. Do not add another retry loop around an agent run. Document model calls separately from maximum HTTP attempts.
+6. Use SettingsReader.ReadSettingsAsync for configuration and AiProvider.RequestAsync for every model call. Declare the name, instructions, input, temperature, output limit, and optional AiJsonSchema in an AiRequest in the lesson. Consume the shared AiResponse and catch AiRequestException with AiProvider.WriteError. Keep AI SDK package references, client lifetimes, agent construction, response conversion, and provider-specific routing inside shared/ so changing the model, provider, or SDK does not require changes in lesson code. Apply provider-specific options only to the relevant provider; never silently change a lesson's settings or route a failed request to another provider.
+7. Validate inputs before making API requests and declare the output limit in the experiment source. The facade uses the shared AiRetryPolicy for at most two HTTP retries on 408, 429, 500, 502, 503, or 504, with AiProvider.RequestTimeoutSeconds setting one 120-second deadline around all attempts and waits. Do not add another deadline or retry loop in a lesson. Use AiProvider.MaxRetries when displaying the retry limit, and document model calls separately from maximum HTTP attempts.
 8. When tests are requested, follow the testing guidance below.
 9. Follow the README format below.
 10. Follow the verification guidance under Check changes.

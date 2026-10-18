@@ -2,7 +2,7 @@ using Xunit;
 
 public class SelectedContextStrategyTests
 {
-    // Selection is deterministic even when an unsupported question has no matching section.
+    // Select the expected projects for each example question, or none when nothing matches.
     [Fact]
     public void Selection_matches_every_fixture_including_an_unknown_question()
     {
@@ -14,7 +14,7 @@ public class SelectedContextStrategyTests
         }
     }
 
-    // Heading matches outrank repeated body words, and document order breaks equal scores.
+    // Prefer heading matches, count repeated words once, and keep document order for equal scores.
     [Fact]
     public void Selection_uses_distinct_keywords_heading_priority_and_document_order()
     {
@@ -31,7 +31,7 @@ public class SelectedContextStrategyTests
         Assert.Equal(["P2", "P3"], selected.Sections.Select(section => section.Id));
     }
 
-    // Selected evidence is kept complete even when a caller supplies a smaller cap.
+    // A smaller size limit must reject the selected text, not cut part of it away.
     [Fact]
     public void Context_is_accepted_at_the_cap_and_rejected_above_it()
     {

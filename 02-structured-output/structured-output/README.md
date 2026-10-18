@@ -20,8 +20,8 @@ The model produces a proposed profile. The program checks it before printing or 
 
 ```mermaid
 flowchart TD
-    A["Program.cs<br/>Read the selected fictional resume"] --> B["CvExtractor.cs + SettingsReader.cs + AiProvider.cs<br/>Read settings and schema; create the agent"]
-    B --> C["CvExtractor.cs<br/>Ask the model for JSON: one model call"]
+    A["Program.cs<br/>Read the selected fictional resume"] --> B["CvExtractor.cs + SettingsReader.cs<br/>Read settings and schema; prepare AiRequest"]
+    B --> C["CvExtractor.cs + AiProvider.cs<br/>Call RequestAsync for JSON: one model call"]
     C -->|Answer| D{"AiProvider.cs<br/>Is the answer nonempty and not cut short?"}
     D -->|Yes| E{"JsonResumeSchemaValidator.cs<br/>Does the JSON match the schema?"}
     E -->|Yes| P["ProfileExtractor.cs<br/>Convert the JSON into profile records"]
@@ -39,7 +39,7 @@ The schema defines field names and value types. JsonResumeSchemaValidator.cs che
 
 Only a profile that passes these checks reaches skill cleanup and saving. ProfileNormalizer.cs trims skill names and keeps the first version of each name, ignoring case. A failed check stops the flow; missing input files or settings stop it before the request.
 
-CvExtractor.cs requests the same JSON Schema and generation settings from both providers. With OpenRouter, it also sends `provider.require_parameters=true` so routing requires support for the requested parameters. That routing option is omitted for Gemini. Both responses go through the same local schema and evidence checks.
+CvExtractor.cs declares its instructions, JSON Schema, and generation settings in an `AiRequest` and calls `AiProvider.RequestAsync`. The facade applies the same schema and settings for both providers. It also sends `provider.require_parameters=true` to OpenRouter so routing requires support for the requested parameters, and omits that routing option for Gemini. CvExtractor.cs contains no provider branch or SDK options. Both responses go through the same local schema and evidence checks.
 
 The [shared retry policy](../../shared/shared/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside the agent call. It keeps the same schema, instructions, and resume. Local schema or evidence failures are not retried.
 
@@ -55,7 +55,7 @@ dotnet run
 
 You can also run the project in Visual Studio. Set `structured-output` as the startup project. A build copies the resumes, JSON schema, and shared settings into the folder containing the executable. The program reads those copies. Edit the original project files and rebuild to try your changes. The first build downloads the packages if needed.
 
-[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file, and [AiProvider.cs](../../shared/shared/AiProvider.cs) creates the SDK client; Git ignores your `.env` file. CvExtractor.cs prints the selected model and provider. Each run makes **one model call**, normally one real HTTP request and at most **three HTTP attempts** with retries. They send the fictional resume to the selected AI provider and may charge your account. The call allows up to 4,096 output tokens, the small pieces of text counted by the model. Temperature controls variation in the generated text and is set to 0.1. The call has a 120-second total deadline, including retry waits and attempts.
+[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file, and the facade in [AiProvider.cs](../../shared/shared/AiProvider.cs) sends the model request; Git ignores your `.env` file. Changing the selected provider or model requires no lesson code changes. CvExtractor.cs prints the selected model and provider. Each run makes **one model call**, normally one real HTTP request and at most **three HTTP attempts** with retries. They send the fictional resume to the selected AI provider and may charge your account. The call allows up to 4,096 output tokens, the small pieces of text counted by the model. Temperature controls variation in the generated text and is set to 0.1. The call has a 120-second total deadline, including retry waits and attempts.
 
 Choose a model and provider that support JSON Schema structured output, temperature, and the output token limit. A schema describes the fields and value types the answer must contain. Gemini supports a subset of JSON Schema, so the selected model must accept this lesson's schema. If the request fails, the program prints the HTTP status and provider error message. HTTP 429 means the provider is limiting requests, has no remaining quota, or is too busy. Wait and try again, or check the quota and model in `shared/shared/.env`. After changing that file, stop any running debugging session and rebuild to copy the new settings.
 
@@ -80,7 +80,7 @@ You still need to judge meaning: a quote mentioning a qualification does not pro
 
 ```text
 Program.cs                                    Main extraction flow and selected resume
-CvExtractor.cs                                Shared agent request and extraction instruction
+CvExtractor.cs                                Extraction instruction, schema, settings, and facade call
 CandidateProfile.cs                           Typed records and nullable facts
 JsonResumeSchemaValidator.cs                  JSON syntax and schema checks
 ProfileExtractor.cs                           JSON conversion into typed records
@@ -88,16 +88,19 @@ ProfileValidator.cs                           Source facts, evidence, dates, and
 ProfileNormalizer.cs                          Skill-name trimming and duplicate removal
 profile.schema.json                           Required JSON structure
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
-../../shared/shared/AiProvider.cs             Shared provider setup, response checks, and API errors
+../../shared/shared/AiProvider.cs             Shared model-call facade, deadlines, checks, and API errors
+../../shared/shared/AiRequest.cs              Request inputs and optional JSON schema
+../../shared/shared/AiResponse.cs             Checked text, token usage, and request timing
+../../shared/shared/AiRequestException.cs     API failures independent of SDK exception types
 ../../shared/shared/AiRetryPolicy.cs          Shared HTTP retries and retry messages
 ../../shared/shared/ProviderSettings.cs       Selected provider connection values
-../../shared/shared.tests/AiProviderTests.cs  Shared client setup and response checks
+../../shared/shared.tests/AiProviderTests.cs  Shared facade request and response checks
 ../../shared/shared/.env                      Provider selection, keys, and models
 ../../shared/shared/.env.example              Template for creating the shared settings
 SampleData/resume.md                         Complete fictional resume
 SampleData/resume-ambiguous.md               Missing facts and an ambiguous date
 SampleData/profile.example.json              Expected example profile
-structured-output.csproj                      .NET 10 project and pinned package dependencies
+structured-output.csproj                      .NET 10 project, JSON validation dependency, and shared reference
 ```
 
 Follow Program.cs from reading the resume to requesting, checking, and saving the profile. The printed JSON lets you inspect both the extracted facts and the quotes used to support them.

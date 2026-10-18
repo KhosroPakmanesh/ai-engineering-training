@@ -2,7 +2,7 @@ using Xunit;
 
 public class ProjectSectionParserTests
 {
-    // Repeated document IDs cannot provide an unambiguous citation target.
+    // Each project needs a unique ID so an answer's reference points to only one project.
     [Fact]
     public void Duplicate_section_ids_are_rejected()
     {

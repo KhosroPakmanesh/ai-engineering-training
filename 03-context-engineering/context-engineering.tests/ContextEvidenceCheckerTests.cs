@@ -2,7 +2,7 @@ using Xunit;
 
 public class ContextEvidenceCheckerTests
 {
-    // A citation must name a supplied section, regardless of which supported bracket style it uses.
+    // A reference must point to a supplied project, whether it uses [P1] or 【P1】.
     [Fact]
     public void Nonexistent_and_excluded_citations_are_rejected()
     {
@@ -12,7 +12,7 @@ public class ContextEvidenceCheckerTests
         Assert.Contains(ContextEvidenceChecker.CheckEvidence("It used TypeScript [P2].", selected), flag => flag.Contains("Rejected citation [P2]"));
     }
 
-    // Valid source spans pass; invented evidence and unsupported confident answers are flagged.
+    // Accept exact project quotes; flag invented quotes and answers that should admit missing evidence.
     [Fact]
     public void Evidence_requires_an_exact_quote_and_accepts_an_explicit_decline()
     {
@@ -25,7 +25,7 @@ public class ContextEvidenceCheckerTests
         Assert.NotEmpty(ContextEvidenceChecker.CheckEvidence("The Salesforce project is P1 [P1].", selected, []));
     }
 
-    // A real quotation still needs a source ID so the learner can trace the answer.
+    // Even an exact quote needs a project ID so the learner can find its source.
     [Fact]
     public void An_answer_without_a_citation_is_flagged()
     {

@@ -1,5 +1,3 @@
-using System.ClientModel;
-
 List<(string Name, string File)> prompts =
 [
     ("A: Zero-shot", "Prompts/A-zero-shot.txt"),
@@ -9,7 +7,7 @@ List<(string Name, string File)> prompts =
 
 try
 {
-    // Check every source file before the comparison can spend a model request.
+    // Check every input file before making any paid model calls.
     await InputValidator.ValidateInputsAsync(prompts.Select(prompt => prompt.File));
 
     // Keep the resume fixed while comparing the three prompt instructions.
@@ -17,7 +15,7 @@ try
 
     return 0;
 }
-catch (ClientResultException error)
+catch (AiRequestException error)
 {
     AiProvider.WriteError(error);
     return 1;

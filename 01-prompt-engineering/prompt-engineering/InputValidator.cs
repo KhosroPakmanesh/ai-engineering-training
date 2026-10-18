@@ -1,7 +1,7 @@
 ﻿
 public static class InputValidator
 {
-    // Find missing or empty inputs before starting the paid comparison.
+    // Find missing or empty input files before making any paid model calls.
     public static async Task ValidateInputsAsync(IEnumerable<string> promptFiles, CancellationToken cancellationToken = default)
     {
         string folder = AppContext.BaseDirectory;
@@ -12,7 +12,7 @@ public static class InputValidator
             CheckInputs(resume, instruction);
         }
     }
-    // Empty source text cannot demonstrate how prompt instructions affect a summary.
+    // A summary needs both resume text and an instruction.
     private static void CheckInputs(string resume, string instruction)
     {
         if (string.IsNullOrWhiteSpace(resume)) throw new InvalidDataException("The resume is empty. No requests were made.");

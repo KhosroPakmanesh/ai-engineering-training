@@ -3,7 +3,7 @@ using Xunit;
 
 public class ContextCreatorTests
 {
-    // A controlled comparison changes only the supplied sections.
+    // Keep the question and instructions the same; change only the supplied project sections.
     [Fact]
     public void Both_prompts_keep_the_question_and_change_only_the_sections()
     {
@@ -28,7 +28,7 @@ public class ContextCreatorTests
         Assert.Equal(full.RootElement.GetProperty("sections")[0].GetRawText(), selected.RootElement.GetProperty("sections")[0].GetRawText());
     }
 
-    // JSON escaping can exceed the prompt limit even while complete source sections fit.
+    // JSON can write one character as six characters, so check the final prompt's length.
     [Fact]
     public void Complete_prompt_limit_is_checked_separately_from_context_size()
     {

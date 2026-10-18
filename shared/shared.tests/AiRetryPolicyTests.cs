@@ -7,7 +7,7 @@ using OpenAI;
 using OpenAI.Chat;
 using Xunit;
 
-// Exercise the real SDK pipeline with local responses and no elapsed retry waits.
+// Check retries using the real AI library, local HTTP responses, and no waiting.
 public class AiRetryPolicyTests
 {
     // Only temporary HTTP failures should result in another request.
@@ -53,7 +53,7 @@ public class AiRetryPolicyTests
         Assert.InRange(policy.Delays[1].TotalSeconds, 4, 4.5);
     }
 
-    // Invalid settings, permissions, and unsupported operations need a local correction.
+    // Do not retry errors that require changing settings, access, or the requested operation.
     [Theory]
     [InlineData(400)]
     [InlineData(401)]
@@ -77,7 +77,7 @@ public class AiRetryPolicyTests
         Assert.Empty(policy.Delays);
     }
 
-    // A server's minimum wait takes priority; invalid or expired values use the normal backoff.
+    // Wait as long as the provider asks; use the usual delay if its wait value is invalid or past.
     [Theory]
     [InlineData("7", 7)]
     [InlineData("0", 2)]
@@ -95,7 +95,7 @@ public class AiRetryPolicyTests
         Assert.InRange(Assert.Single(policy.Delays).TotalSeconds, minimumSeconds, minimumSeconds + 0.5);
     }
 
-    // HTTP-date Retry-After values must also postpone the next attempt.
+    // The provider can ask us to wait until a date and time, not just for a number of seconds.
     [Fact]
     public async Task Retry_after_http_date_is_respected()
     {
@@ -113,7 +113,7 @@ public class AiRetryPolicyTests
             (retryAt - DateTimeOffset.UtcNow).TotalSeconds, (retryAt - before).TotalSeconds + 0.5);
     }
 
-    // The SDK passes the lesson's deadline token into the wait between attempts.
+    // Canceling the call must also stop the wait before the next attempt.
     [Fact]
     public async Task Cancellation_during_the_retry_wait_prevents_another_attempt()
     {
@@ -146,7 +146,7 @@ public class AiRetryPolicyTests
         Assert.Empty(policy.Delays);
     }
 
-    // Synchronous SDK calls use the same policy and attempt limit as asynchronous calls.
+    // Calls that wait for a result directly must follow the same retry rules as calls using await.
     [Fact]
     public void Synchronous_requests_use_the_retry_policy()
     {
@@ -162,7 +162,7 @@ public class AiRetryPolicyTests
         Assert.Single(policy.Delays);
     }
 
-    // Only the HTTP handler is replaced; request serialization and retry execution use the installed SDK.
+    // Use local HTTP responses while the real AI library builds requests and retries failures.
     private static ChatClient CreateClient(HttpClient httpClient, ClientRetryPolicy policy) => new(
         "test-model", new ApiKeyCredential("test-key"), new OpenAIClientOptions
         {
@@ -172,7 +172,7 @@ public class AiRetryPolicyTests
             NetworkTimeout = TimeSpan.FromSeconds(AiProvider.RequestTimeoutSeconds)
         });
 
-    // Record the scheduled delays without sleeping, and allow a test to cancel during a wait.
+    // Record each requested delay without waiting, and let tests cancel at that point.
     private sealed class RecordingRetryPolicy(Action? beforeWait = null) : AiRetryPolicy
     {
         public List<TimeSpan> Delays { get; } = [];
@@ -191,7 +191,7 @@ public class AiRetryPolicyTests
         }
     }
 
-    // All responses stay in memory, so these tests cannot contact a provider or use real credentials.
+    // Return responses from the test itself so no real provider or API key is needed.
     private sealed class ResponseHandler(params int[] statuses) : HttpMessageHandler
     {
         private const string SuccessfulResponse = """

@@ -1,4 +1,4 @@
-// Keep the selected provider's connection values together without exposing its key in diagnostics.
+// Store the selected provider's settings, but leave its API key out of ToString().
 public sealed record ProviderSettings(string Name, string Key, string Model, Uri Endpoint)
 {
     public override string ToString() => $"{Name}: {Model}";

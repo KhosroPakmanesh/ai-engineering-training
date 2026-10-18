@@ -3,7 +3,7 @@ using System.Text.Json;
 
 public static class JsonResumeSchemaValidator
 {
-    // Reject duplicate properties and schema violations before profile parsing.
+    // Reject repeated field names and values that do not match the required JSON format.
     public static void ValidateSchema(string jsonResume)
     {
         using JsonDocument document = JsonDocument.Parse(jsonResume, new JsonDocumentOptions { AllowDuplicateProperties = false });
@@ -14,7 +14,7 @@ public static class JsonResumeSchemaValidator
         if (!evaluation.IsValid)
             throw new InvalidDataException(string.Join(Environment.NewLine, SchemaErrors(evaluation)));
     }
-    // Include field paths so a learner can locate the rejected JSON values.
+    // Include each field's path so the learner can find the invalid value.
     private static IEnumerable<string> SchemaErrors(EvaluationResults result)
     {
         if (result.Errors is not null)

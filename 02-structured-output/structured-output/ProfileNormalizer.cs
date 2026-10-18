@@ -1,6 +1,6 @@
 ﻿public static class ProfileNormalizer
 {
-    // Preserve the first supported spelling and evidence for each skill.
+    // Keep the first entry for each skill, with its spelling and supporting quote.
     public static CandidateProfile NormalizeProfile(CandidateProfile profile) => profile with
     {
         Skills = profile.Skills.Select(skill => skill with { Name = skill.Name.Trim() })

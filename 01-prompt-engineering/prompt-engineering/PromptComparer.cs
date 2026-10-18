@@ -1,6 +1,6 @@
 ﻿public static class PromptComparer
 {
-    // Show each independent answer beside the same word-count measurement.
+    // Count words the same way for each summary so the results can be compared.
     public static async Task ComparePromptsAsync(List<(string Name, string File)> prompts)
     {
         foreach (var (name, promptFile) in prompts)

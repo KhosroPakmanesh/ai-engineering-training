@@ -1,7 +1,7 @@
 public static class FullContextStrategy
 {
     public const string StrategyDescription = "All sections in document order; reject if the context exceeds the character cap.";
-    // The full baseline keeps every section in its original document order.
+    // Give the model every project section in the same order as the source document.
     public static ContextStrategy Prepare(List<ProjectSection> sections,
         int characterCap = ContextCreatorHelpers.ContextCharacterCap)
     {

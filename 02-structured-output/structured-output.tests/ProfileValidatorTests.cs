@@ -1,6 +1,6 @@
 using Xunit;
 
-// These tests share ProfileValidator static state with the other validation callers.
+// Run these classes one at a time because ProfileValidator stores shared data.
 [Collection("Profile validation")]
 public class ProfileValidatorTests
 {
@@ -24,7 +24,7 @@ public class ProfileValidatorTests
         Assert.Equal("Mira Example", accepted.Name);
     }
 
-    // A quote containing the facts is still invalid if the resume never says it verbatim.
+    // A quote must copy the resume exactly, even if changed wording contains the same facts.
     [Fact]
     public void Evidence_quotes_must_exist_verbatim_in_the_resume()
     {
@@ -39,7 +39,7 @@ public class ProfileValidatorTests
         Assert.Contains("/evidence/quote: expected an exact, nonempty span of the CV.", error.Message);
     }
 
-    // Employment dates do not authorize inventing a duration that the source does not state.
+    // Do not calculate months of employment from dates when the resume does not state the duration.
     [Fact]
     public void Employment_duration_must_be_explicitly_stated()
     {
@@ -54,7 +54,7 @@ public class ProfileValidatorTests
         Assert.Contains("/experience/0/durationMonths: duration must be explicitly stated in months, or null.", error.Message);
     }
 
-    // Partial dates retain their precision; definite reversals and invalid dates fail.
+    // Keep dates as given, including years alone; reject invalid dates and clearly reversed start and end dates.
     [Fact]
     public void Date_checks_preserve_precision_and_reject_invalid_chronology()
     {
@@ -75,7 +75,7 @@ public class ProfileValidatorTests
                 ProfileValidator.ValidateProfile(invalid, SourceWithExperienceQuote(invalid), "resume.md")).Message);
     }
 
-    // Focus date checks on one entry while preserving the other fixture facts.
+    // Change one job entry's dates and leave the other example facts unchanged.
     private static CandidateProfile WithExperienceDates(CandidateProfile profile, string? start, string? end)
     {
         Experience first = profile.Experience[0];
@@ -86,7 +86,7 @@ public class ProfileValidatorTests
         };
     }
 
-    // The constructed date evidence must also appear literally in the test source.
+    // Put the date quote in the test resume too, so the exact-quote check can pass.
     private static string SourceWithExperienceQuote(CandidateProfile profile) =>
         ProfileTestData.ReadSample("resume.md") + "\n" + profile.Experience[0].Evidence.Quote;
 }

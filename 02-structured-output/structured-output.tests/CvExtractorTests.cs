@@ -2,7 +2,7 @@ using System.Text.Json;
 using Xunit;
 using Xunit.Abstractions;
 
-// These tests share ProfileValidator static state with the other validation callers.
+// Run these classes one at a time because ProfileValidator stores shared data.
 [Collection("Profile validation")]
 public class CvExtractorTests(ITestOutputHelper output)
 {
@@ -33,7 +33,7 @@ public class CvExtractorTests(ITestOutputHelper output)
         }
     }
 
-    // Both model responses must contain useful typed collections.
+    // Both resumes must produce a name and nonempty experience, education, and skill lists.
     private static void AssertPopulatedProfile(CandidateProfile profile)
     {
         Assert.False(string.IsNullOrWhiteSpace(profile.Name));

@@ -1,0 +1,4 @@
+// Return the answer, token counts, and request time using the same fields for every provider.
+public sealed record AiResponse(string Text, AiTokenUsage? Usage, long LatencyMilliseconds);
+
+public sealed record AiTokenUsage(long? InputTokens, long? OutputTokens, long? TotalTokens);

@@ -2,7 +2,7 @@ using Xunit;
 
 public class FullContextStrategyTests
 {
-    // The full baseline must reject excess text rather than silently remove evidence.
+    // Stop when the full context is too long; do not remove project text to make it fit.
     [Fact]
     public void Context_is_accepted_at_the_cap_and_rejected_above_it()
     {

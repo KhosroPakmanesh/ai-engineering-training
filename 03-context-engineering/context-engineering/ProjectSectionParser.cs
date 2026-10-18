@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 public static class ProjectSectionParser
 {
 
-    // Keep complete source sections so selected context and exact quotes stay traceable.
+    // Keep each project's full text so its quotes can be checked against the original.
     public static List<ProjectSection> ParseProjectSection(string markdown)
     {
         MatchCollection headings = Regex.Matches(markdown,

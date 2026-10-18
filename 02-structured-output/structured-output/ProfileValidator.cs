@@ -8,7 +8,7 @@ public static class ProfileValidator
     private static string _resumeFileName = string.Empty;
     private static readonly List<string> errors = [];
 
-    // Check this profile independently and report all unsupported facts together.
+    // Check the profile against the resume and report all failed checks together.
     public static void ValidateProfile(CandidateProfile profile, string rawStringResume, string resumeFileName)
     {
         errors.Clear();
@@ -23,7 +23,7 @@ public static class ProfileValidator
 
         if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
     }
-    // Dates and durations need explicit support rather than inferred employment details.
+    // Check job dates against their quotes; a duration must be stated in months, not calculated.
     private static void CheckExperience(List<Experience> experience)
     {
         for (int index = 0; index < experience.Count; index++)
@@ -36,7 +36,7 @@ public static class ProfileValidator
                 errors.Add($"{path}/durationMonths: duration must be explicitly stated in months, or null.");
         }
     }
-    // Qualifications and study dates must be present in each item's own evidence.
+    // Check each education entry's facts and dates against its own resume quote.
     private static void CheckEducation(List<Education> education)
     {
         for (int index = 0; index < education.Count; index++)
@@ -47,13 +47,13 @@ public static class ProfileValidator
             CheckDates(item.StartDate, item.EndDate, path);
         }
     }
-    // Proficiency is a source fact, so an unstated level must remain null.
+    // A skill level must appear in the quote; otherwise it must stay null.
     private static void CheckSkills(List<Skill> skills)
     {
         for (int index = 0; index < skills.Count; index++)
             CheckEvidence(skills[index].Evidence, $"/skills/{index}", skills[index].Name, skills[index].Proficiency);
     }
-    // Require an exact source span containing every non-null fact for the item.
+    // Each item needs an exact resume quote that contains all of its known facts.
     private static void CheckEvidence(Evidence evidence, string path, params List<string?> facts)
     {
         if (evidence.Source != _resumeFileName)
@@ -64,7 +64,7 @@ public static class ProfileValidator
             if (fact is not null && (string.IsNullOrWhiteSpace(fact) || !evidence.Quote.Contains(fact.Trim(), StringComparison.OrdinalIgnoreCase)))
                 errors.Add($"{path}/evidence/quote: an extracted fact is absent from its evidence.");
     }
-    // Reject chronology only when every interpretation of the partial dates is reversed.
+    // Reject an end date only when it is earlier than every possible start date.
     private static void CheckDates(string? start, string? end, string path)
     {
         var startRange = DateRange(start, path + "/startDate");
@@ -72,7 +72,7 @@ public static class ProfileValidator
         if (startRange.HasValue && endRange.HasValue && endRange.Value.Max < startRange.Value.Min)
             errors.Add($"{path}/endDate: end date precedes start date.");
     }
-    // Compare date ranges without inventing a missing month or day in the profile.
+    // Treat a year or month as a date range so missing date parts stay unknown in the profile.
     private static (DateOnly Min, DateOnly Max)? DateRange(string? date, string path)
     {
         if (date is null) return null;

@@ -2,7 +2,7 @@ using Xunit;
 
 public class SettingsReaderTests
 {
-    // Ordinary settings-file formatting must preserve the selected values.
+    // Comments, quotes, and spaces around settings must not change their values.
     [Fact]
     public void Settings_accept_comments_quotes_and_equals_in_values()
     {
@@ -19,7 +19,7 @@ public class SettingsReaderTests
         Assert.Equal(new Uri("https://openrouter.ai/api/v1"), settings.Endpoint);
     }
 
-    // Unused provider placeholders must not prevent the selected provider from working.
+    // Only the selected provider needs a real key and model; unused example values are allowed.
     [Theory]
     [InlineData("openrouter", "OPENROUTER", "GEMINI")]
     [InlineData("gemini", "GEMINI", "OPENROUTER")]
@@ -37,7 +37,7 @@ public class SettingsReaderTests
         Assert.Equal("test-model", settings.Model);
     }
 
-    // Incomplete selected credentials must fail locally before a paid request.
+    // Reject missing or example keys and model names before making a paid request.
     [Theory]
     [InlineData("openrouter", "OPENROUTER")]
     [InlineData("gemini", "GEMINI")]
@@ -62,7 +62,7 @@ public class SettingsReaderTests
         }
     }
 
-    // A valid key must not silently choose a provider for an unsupported selector.
+    // Reject an unknown provider name even if another provider has a valid key.
     [Theory]
     [InlineData("")]
     [InlineData("unknown")]

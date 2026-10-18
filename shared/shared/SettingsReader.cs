@@ -1,6 +1,6 @@
 ﻿public static class SettingsReader
 {
-    // Read the one copied settings file before an application creates its client.
+    // Read the copied settings so console runs and tests use the same configuration.
     public static async Task<ProviderSettings> ReadSettingsAsync(
         string folder, CancellationToken cancellationToken = default)
     {
@@ -10,7 +10,7 @@
 
         return ParseSettings(await File.ReadAllLinesAsync(envFile, cancellationToken));
     }
-    // Select the key, model, and endpoint together without requiring unused credentials.
+    // Require a key and model only for the selected provider.
     public static ProviderSettings ParseSettings(IEnumerable<string> lines)
     {
         Dictionary<string, string> settings = ReadValues(lines);
