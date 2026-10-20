@@ -1,13 +1,15 @@
 # Shared Plumbing: one small library
 
-This library gives all three learning applications one way to call an AI model. A facade is a shared entry point that hides how an operation is carried out. Each lesson supplies an **AiRequest** with its prompts and generation settings. **AiProvider.cs** creates the client and agent, sends the request, and returns an **AiResponse**. It also handles provider options, deadlines, response checks, and API errors. **SettingsReader.cs** selects the provider and reads its connection values into **ProviderSettings**. **AiRetryPolicy.cs** retries temporary HTTP failures. For example, the structured-output lesson supplies its JSON schema without knowing how OpenRouter or Gemini receives it.
+This library gives all four learning applications one way to call an AI model. A facade is a shared entry point that hides how an operation is carried out. Each lesson supplies an **AiRequest** with its prompts and generation settings. **AiProvider.cs** creates the client and agent, sends the request, and returns an **AiResponse**. It also handles provider options, deadlines, response checks, and API errors. **AiToolSession.cs** adds real function tools, call limits, and execution records when requested. **SettingsReader.cs** selects the provider and reads its connection values into **ProviderSettings**. **AiRetryPolicy.cs** retries temporary HTTP failures. For example, function-calling supplies an ordinary C# calculator without constructing an SDK agent.
 
 | Method or value | Purpose |
 | --- | --- |
 | SettingsReader.ReadSettingsAsync and ParseSettings | Select the provider and read its key and model from the copied .env file. |
-| AiProvider.RequestAsync | Send one independent model request and return text, usage, and timing. |
+| AiProvider.RequestAsync | Run one independent conversation and return final text, usage, and timing. |
 | AiRequest and AiJsonSchema | Declare lesson inputs and an optional required JSON format without SDK types. |
 | AiResponse and AiTokenUsage | Return checked text, available token counts, and request duration. |
+| AiTool and AiToolCalling | Register ordinary C# delegates and explicit model/tool call limits without SDK types. |
+| AiToolExecution and AiResponse.ModelCalls | Return actual tool results, tool duration, and the number of model turns. |
 | AiRequestException | Preserve an API failure's status and details without an SDK exception contract. |
 | AiProvider.MaxRetries | Allow at most two retries after the first HTTP attempt. |
 | ReadResponse | Return valid text unchanged; stop if the answer is empty or cut short. |
@@ -25,10 +27,14 @@ flowchart TD
     A["Learning application<br/>Calls SettingsReader.ReadSettingsAsync"] --> B{"SettingsReader.cs<br/>Are the copied .env settings present and filled in?"}
     B -->|Yes| C["Learning application<br/>Declare prompts, generation settings, and optional schema"]
     C --> P["AiProvider.RequestAsync<br/>Create the client and agent; apply provider options"]
-    P --> D["AiProvider.cs<br/>Run one independent call with a 120-second deadline"]
+    P --> D["AiProvider.cs<br/>Run one independent conversation with a 120-second deadline"]
     D --> R["SDK<br/>Send the HTTP request"]
-    R -->|Answer| E{"AiProvider.cs<br/>Does ReadResponse accept this text?"}
-    E -->|Yes| F["Learning application<br/>Use AiResponse text, token usage, and timing"]
+    R -->|Answer| T{"AiToolSession.cs<br/>Registered function requested?"}
+    T -->|Yes| U["AiToolSession.cs<br/>Check limits, execute C#, and record its result"]
+    U -->|Next model turn| R
+    U -->|Tool or budget error| H
+    T -->|No| E{"AiProvider.cs<br/>Does ReadResponse accept the final text?"}
+    E -->|Yes| F["Learning application<br/>Use final text, usage, timing, and actual tool executions"]
     R -->|API error| Q{"AiRetryPolicy.cs<br/>Temporary failure and retries left?"}
     Q -->|Yes| W["Log the retry and wait<br/>Honor Retry-After; add jitter"]
     W --> R
@@ -38,7 +44,9 @@ flowchart TD
     E -->|No| H
 ```
 
-The facade creates and disposes its client for each request and starts the agent without saved conversation history. Earlier questions and answers cannot enter a later comparison call. OpenRouter uses `https://openrouter.ai/api/v1`; Gemini uses Google's OpenAI-compatible endpoint at `https://generativelanguage.googleapis.com/v1beta/openai/`. For a request with AiJsonSchema, the facade applies the schema and strict output options. It adds `provider.require_parameters=true` only for OpenRouter. Retries resend the same HTTP request inside the SDK; they do not restart the agent or switch providers. A permanent error or a failure after the retries stops the lesson. Building the library or running its own tests makes zero real model requests.
+The facade creates and disposes its client for each request and starts the agent without saved conversation history. Earlier questions and answers cannot enter a later comparison call. OpenRouter uses `https://openrouter.ai/api/v1`; Gemini uses Google's OpenAI-compatible endpoint at `https://generativelanguage.googleapis.com/v1beta/openai/`. For a request with AiJsonSchema, the facade applies the schema and strict output options. Schema and tool requests add `provider.require_parameters=true` only for OpenRouter. Retries resend the same HTTP request inside the SDK; they do not restart the agent or switch providers. A permanent error or a failure after the retries stops the lesson. Building the library or running its own tests makes zero real model requests.
+
+When AiRequest.ToolCalling is present, AiToolSession creates AIFunction instances with `AIFunctionFactory.Create` and uses Agent Framework with a bounded FunctionInvokingChatClient. It counts each model turn beneath that loop. Unknown, malformed, truncated, or over-budget tool batches fail before local execution. Function exceptions stop the run without a model repair request. Successful executions retain their actual JSON result and duration. Logs show the tool name, redacted inputs, duration, and success; they omit argument values and exception contents. The session preserves the original SDK assistant tool message, including opaque provider fields such as Gemini thought signatures, for the next model turn. Each run has its own counters and results.
 
 AiRetryPolicy allows two retries for HTTP 408, 429, 500, 502, 503, and 504. It waits about 2 seconds before the first retry and 4 seconds before the second. Each wait adds 0-0.5 seconds of random variation, called jitter, so several clients are less likely to retry at the same instant. The SDK reads `Retry-After` headers, including dates; the policy waits at least that long when the provider asks for a longer delay. Cancellation and the lesson's 120-second deadline stop requests and waits. Authentication, configuration, and other HTTP errors are not retried, nor are local checks or network exceptions without an HTTP response.
 
@@ -56,15 +64,15 @@ dotnet build
 
 shared.csproj copies `.env` into its build output folder. Because the applications and tests reference this library, they receive the same settings file in their output folders too. Rebuild after changing the source settings. This is a class library, so it has no console entry point to run on its own. To try a lesson, run `dotnet run` from that application's folder or select it as the startup project in Visual Studio.
 
-Building this library makes no model requests. Running a lesson sends its prompts and fictional source text to OpenRouter and its upstream provider, or directly to Google's Gemini API, and may charge your account. Each application's README distinguishes model calls from HTTP attempts: one model call normally sends one request but can send up to three attempts with retries. All AI package references are in shared.csproj: OpenAI 2.14.0, Microsoft.Extensions.AI.OpenAI 10.11.0, Microsoft.Agents.AI 1.25.0, and System.ClientModel 1.16.0. The facade applies a 120-second total deadline to a model call, including all attempts and waits; the SDK network timeout also uses that value.
+Building this library makes no model requests. Running a lesson sends its prompts and fictional source text to OpenRouter and its upstream provider, or directly to Google's Gemini API, and may charge your account. Each application's README distinguishes facade requests, model calls, local executions, and HTTP attempts: one model call normally sends one HTTP request but can send up to three attempts with retries. A tool conversation can contain multiple model calls. All AI package references are in shared.csproj: OpenAI 2.14.0, Microsoft.Extensions.AI.OpenAI 10.11.0, Microsoft.Agents.AI 1.25.0, and System.ClientModel 1.16.0. One 120-second deadline covers the complete facade request, including every model turn, tool execution, attempt, and wait; the SDK network timeout also uses that value.
 
-Choose a model that accepts the lesson's temperature and output token limit. The structured-output lesson also requires support for its JSON Schema. Gemini supports a subset of JSON Schema. Provider support can differ, so switching the configuration does not guarantee identical answers or feature support. The lessons keep their settings fixed rather than silently adjusting them for another model.
+Choose a model that accepts the lesson's temperature and output token limit. The structured-output lesson also requires support for its JSON Schema, and function-calling requires function tools. Gemini supports a subset of JSON Schema. Provider support can differ, so switching the configuration does not guarantee identical answers or feature support. The lessons keep their settings fixed rather than silently adjusting them for another model.
 
 ## Understand the results
 
 SettingsReader.ReadSettingsAsync returns a `ProviderSettings` record with the provider's display name, key, model, and endpoint after checking that the selected key and model are filled in and are not example placeholders. `ToString()` shows only the name and model; it omits the key. This local check does not confirm that the key works or the model is available; the facade's API request finds those problems.
 
-AiProvider.RequestAsync accepts the selected settings and an AiRequest. It returns an AiResponse containing checked text, optional AiTokenUsage, and LatencyMilliseconds. The duration covers the agent run, including HTTP attempts and retry waits, and excludes client creation. Missing token measurements remain null. The facade preserves the declared prompts, temperature, token limit, and schema when selecting a provider.
+AiProvider.RequestAsync accepts the selected settings and an AiRequest. It returns an AiResponse containing checked text, optional AiTokenUsage, and LatencyMilliseconds. The duration covers the agent run, including HTTP attempts and retry waits, and excludes client creation. Missing token measurements remain null. The facade preserves the declared prompts, temperature, token limit, and schema when selecting a provider. AiRequest.ToolCalling optionally supplies a list of AiTool records containing a name, description, and ordinary C# delegate, plus explicit MaxModelCalls and MaxToolCalls. A tool request requires at least two allowed model turns and a positive tool limit. Each successful AiToolExecution contains the tool name, actual JSON result, and local duration. AiResponse.ModelCalls reports completed request turns, and ToolExecutions lists actual successful executions; requests without tools retain a count of one and an empty list. Final text excludes intermediate assistant preambles. Lessons must still check whether a required tool ran and whether its answer matches the result.
 
 ReadResponse checks whether an answer is present and complete. It returns valid text exactly as received. This does not check whether the facts are correct; each lesson has its own source checks, and you still review the answer's meaning yourself.
 
@@ -85,6 +93,8 @@ SettingsReader.cs                       Provider selection, settings parsing, an
 AiProvider.cs                           Model-call facade, provider options, responses, deadlines, and errors
 AiRequest.cs                            Lesson request and optional JSON schema records
 AiResponse.cs                           Checked text, token usage, and request duration records
+AiToolCalling.cs                        SDK-independent tool declarations, budgets, and execution records
+AiToolSession.cs                        Function schemas, SDK invocation loop, call limits, and redacted traces
 AiRequestException.cs                   API status and details independent of the SDK
 AiRetryPolicy.cs                        Bounded HTTP retries, provider delays, and retry messages
 ProviderSettings.cs                     Selected provider, key, model, and endpoint
@@ -105,7 +115,7 @@ shared.csproj                           .NET 10 library, SDK and Agent Framework
 | Test file | Checks |
 | --- | --- |
 | [SettingsReaderTests.cs](../shared.tests/SettingsReaderTests.cs) | Parsing, the default OpenRouter selection, unused credentials, unsupported selectors, missing values, and unchanged placeholders. |
-| [AiProviderTests.cs](../shared.tests/AiProviderTests.cs) | Selected endpoints and models, generation settings, exact prompts, independent calls, strict schemas, provider-specific routing, response guards, token usage, API errors, and cancellation. |
+| [AiProviderTests.cs](../shared.tests/AiProviderTests.cs) | Selected endpoints and models, settings, exact prompts, independent calls, schemas, routing, response guards, usage, API errors, cancellation, real function execution, preserved thought signatures, tool/model budgets, malformed calls, and isolated tool sessions. |
 | [ProviderSettingsTests.cs](../shared.tests/ProviderSettingsTests.cs) | Settings descriptions omit credentials. |
 | [AiRetryPolicyTests.cs](../shared.tests/AiRetryPolicyTests.cs) | Unchanged request bodies, recovery, exhaustion after three attempts, permanent errors, exponential delays, Retry-After seconds and dates, cancellation, successful first attempts, and synchronous calls. |
 
@@ -119,4 +129,4 @@ dotnet test shared/shared.tests/shared.tests.csproj
 
 You can also use Visual Studio's Test Explorer. This test run makes **zero API requests**. It uses made-up settings and responses, so it can check the helpers without contacting a model.
 
-References: [MSBuild project items and references](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), [ClientRetryPolicy](https://learn.microsoft.com/en-us/dotnet/api/system.clientmodel.primitives.clientretrypolicy), [Gemini retry guidance](https://ai.google.dev/gemini-api/docs/troubleshooting#retry-strategy), and [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).
+References: [MSBuild project items and references](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), [Agent Framework function tools](https://learn.microsoft.com/en-us/agent-framework/agents/tools/function-tools), [ClientRetryPolicy](https://learn.microsoft.com/en-us/dotnet/api/system.clientmodel.primitives.clientretrypolicy), [Gemini retry guidance](https://ai.google.dev/gemini-api/docs/troubleshooting#retry-strategy), and [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).

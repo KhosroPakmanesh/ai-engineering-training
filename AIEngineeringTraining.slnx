@@ -23,4 +23,8 @@
     <Project Path="03-context-engineering/context-engineering/context-engineering.csproj" />
     <Project Path="03-context-engineering/context-engineering.tests/context-engineering.tests.csproj" />
   </Folder>
+  <Folder Name="/04-function-calling/">
+    <Project Path="04-function-calling/function-calling/function-calling.csproj" />
+    <Project Path="04-function-calling/function-calling.tests/function-calling.tests.csproj" />
+  </Folder>
 </Solution>

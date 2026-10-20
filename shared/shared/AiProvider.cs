@@ -22,12 +22,20 @@ public static class AiProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         ChatOptions chatOptions = CreateChatOptions(settings, request);
-        using IChatClient chatClient = CreateChatClient
-            (settings, httpClient).AsIChatClient();
+        AiToolSession? toolSession = request.ToolCalling is { } toolCalling ? new(toolCalling) : null;
+        IChatClient providerClient = CreateChatClient(settings, httpClient).AsIChatClient();
+        using IChatClient chatClient = toolSession is null ? providerClient : toolSession.CreateChatClient(providerClient);
+        if (toolSession is not null)
+        {
+            chatOptions.Tools = toolSession.CreateTools();
+            chatOptions.ToolMode = ChatToolMode.Auto;
+            chatOptions.AllowMultipleToolCalls = false;
+        }
         ChatClientAgent agent = new(chatClient, new ChatClientAgentOptions
         {
             Name = request.Name,
-            ChatOptions = chatOptions
+            ChatOptions = chatOptions,
+            UseProvidedChatClientAsIs = toolSession is not null
         });
 
         using var timeout = CancellationTokenSource
@@ -43,11 +51,15 @@ public static class AiProvider
             timer.Stop();
 
             return new(
-                Text: ReadResponse(response.Text,
+                Text: ReadResponse(toolSession?.FinalText ?? response.Text,
                     response.RawRepresentation is ChatResponse chatResponse
                     && chatResponse.FinishReason == ChatFinishReason.Length),
                 Usage: ReadUsage(response.Usage),
-                LatencyMilliseconds: timer.ElapsedMilliseconds);
+                LatencyMilliseconds: timer.ElapsedMilliseconds)
+            {
+                ModelCalls = toolSession?.ModelCalls ?? 1,
+                ToolExecutions = toolSession?.Executions ?? []
+            };
         }
         catch (ClientResultException error)
         {
@@ -74,7 +86,7 @@ public static class AiProvider
         Console.Error.WriteLine(ErrorAdvice(error.Status));
     }
 
-    // Keep the lesson's settings and JSON format unchanged when switching providers.
+    // Keep the lesson's settings, JSON format, and tools unchanged when switching providers.
     private static ChatOptions CreateChatOptions(ProviderSettings settings, AiRequest request)
     {
         ChatOptions chatOptions = new()
@@ -84,19 +96,26 @@ public static class AiProvider
             MaxOutputTokens = request.MaxOutputTokens
         };
 
+        if (request.ResponseSchema is not null || request.ToolCalling is not null)
+        {
+            // The SDK adds tools to these options, so each model turn needs a fresh instance.
+            chatOptions.RawRepresentationFactory = _ =>
+            {
+                var providerOptions = new OpenAI.Chat.ChatCompletionOptions();
+                if (settings.Name == "OpenRouter")
+                {
+                    // Ask OpenRouter to use a provider that supports the requested settings.
+#pragma warning disable SCME0001
+                    providerOptions.Patch.Set("$.provider"u8, """{"require_parameters":true}"""u8);
+#pragma warning restore SCME0001
+                }
+                return providerOptions;
+            };
+        }
+
         if (request.ResponseSchema is { } responseSchema)
         {
-            var providerOptions = new OpenAI.Chat.ChatCompletionOptions();
-            if (settings.Name == "OpenRouter")
-            {
-                // Ask OpenRouter to use a provider that supports the requested settings.
-#pragma warning disable SCME0001
-                providerOptions.Patch.Set("$.provider"u8, """{"require_parameters":true}"""u8);
-#pragma warning restore SCME0001
-            }
-
             chatOptions.AdditionalProperties = new() { ["strict"] = true };
-            chatOptions.RawRepresentationFactory = _ => providerOptions;
             chatOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema
                 (JsonElement.Parse(responseSchema.Schema), responseSchema.Name);
         }
