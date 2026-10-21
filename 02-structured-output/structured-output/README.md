@@ -107,17 +107,17 @@ Follow Program.cs from reading the resume to requesting, checking, and saving th
 
 ## Tests
 
-The solution includes `structured-output.tests`, a small xUnit project with nine cases: seven local cases and two integration cases. Test files match the source files they check.
+The solution includes `structured-output.tests`, a small xUnit project with ten cases: eight local cases and two integration cases. Test files match the source files they check.
 
 | Test file | Checks |
 | --- | --- |
 | [CvExtractorTests.cs](../structured-output.tests/CvExtractorTests.cs) | Two real model responses pass the complete schema, parsing, evidence, and normalization flow; unknown facts remain null. |
 | [JsonResumeSchemaValidatorTests.cs](../structured-output.tests/JsonResumeSchemaValidatorTests.cs) | Malformed JSON and schema violations are rejected. |
 | [ProfileExtractorTests.cs](../structured-output.tests/ProfileExtractorTests.cs) | The known example becomes typed records through the local acceptance flow. |
-| [ProfileValidatorTests.cs](../structured-output.tests/ProfileValidatorTests.cs) | Source facts and exact quotes, explicitly stated durations, partial dates, chronology, and a valid call after a rejected profile. |
+| [ProfileValidatorTests.cs](../structured-output.tests/ProfileValidatorTests.cs) | Source facts and exact quotes, explicitly stated durations, partial dates, chronology, a valid call after a rejected profile, and independent concurrent validations. |
 | [ProfileNormalizerTests.cs](../structured-output.tests/ProfileNormalizerTests.cs) | Skill names are trimmed and the first duplicate is preserved with its evidence. |
 
-The integration tests call `CvExtractor.ExtractAsync`, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. [ProfileTestData.cs](../structured-output.tests/TestData/ProfileTestData.cs) supplies fresh records from those inputs. Tests that call the current validator share an xUnit collection so its static working state cannot overlap between classes. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+The integration tests call `CvExtractor.ExtractAsync`, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. [ProfileTestData.cs](../structured-output.tests/TestData/ProfileTestData.cs) supplies fresh records from those inputs. ProfileValidator creates a fresh instance for each call. That instance holds the source text, filename, and errors, so test classes can run independently. A concurrency regression test starts checks for different fictional sources together and verifies that each accepted or rejected profile keeps its own result. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 

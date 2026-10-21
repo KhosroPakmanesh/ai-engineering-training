@@ -2,8 +2,6 @@ using System.Text.Json;
 using Xunit;
 using Xunit.Abstractions;
 
-// Run these classes one at a time because ProfileValidator stores shared data.
-[Collection("Profile validation")]
 public class CvExtractorTests(ITestOutputHelper output)
 {
     // Model responses pass through the same local checks and cleanup as Program.cs.

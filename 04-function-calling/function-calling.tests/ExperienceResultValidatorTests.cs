@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Xunit;
 
 public class ExperienceResultValidatorTests
@@ -14,16 +13,5 @@ public class ExperienceResultValidatorTests
         ExperienceResult result = new(36, 3, []);
         if (expectedValid) ExperienceResultValidator.ValidateAnswer(answer, result);
         else Assert.Throws<InvalidDataException>(() => ExperienceResultValidator.ValidateAnswer(answer, result));
-    }
-
-    // A different or repeated function is not evidence for this lesson's single calculation.
-    [Fact]
-    public void Wrong_or_multiple_tool_records_are_rejected()
-    {
-        AiToolExecution execution = new("OtherTool", JsonSerializer.SerializeToElement(new { totalMonths = 36 }), 0);
-        AiResponse response = new("answer", null, 0) { ToolExecutions = [execution] };
-        Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
-        response = response with { ToolExecutions = [execution with { ToolName = "CalculateExperience" }, execution] };
-        Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
     }
 }

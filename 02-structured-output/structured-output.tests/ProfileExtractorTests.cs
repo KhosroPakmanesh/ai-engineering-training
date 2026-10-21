@@ -1,7 +1,5 @@
 using Xunit;
 
-// Run these classes one at a time because ProfileValidator stores shared data.
-[Collection("Profile validation")]
 public class ProfileExtractorTests
 {
     // A valid example must pass JSON checks, record conversion, evidence checks, and skill cleanup.

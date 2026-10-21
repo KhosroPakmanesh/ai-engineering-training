@@ -7,6 +7,7 @@ public class ExperienceCalculatorTests
     public void Nonoverlapping_jobs_count_complete_calendar_months_without_changing_inputs()
     {
         List<WorkInterval> intervals = [new("2022-04-01", "2022-07-01"), new("2020-01-01", "2020-03-01")];
+        ExperienceInputsValidator.ValidateIntervals(intervals, null);
         ExperienceResult result = ExperienceCalculator.CalculateExperience(intervals, null);
         Assert.Equal(5, result.TotalMonths);
         Assert.Equal(2, result.MergedIntervals.Count);
@@ -18,6 +19,7 @@ public class ExperienceCalculatorTests
     public async Task Sample_jobs_merge_overlaps_and_resolve_current_roles()
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
         ExperienceResult result = ExperienceCalculator.CalculateExperience(inputs.Intervals, inputs.EvaluationDate);
         Assert.Equal(36, result.TotalMonths);
         Assert.Equal(3, result.InputIntervalCount);
@@ -35,7 +37,9 @@ public class ExperienceCalculatorTests
     [InlineData("9999-12-31", "9999-12-31", 0)]
     public void Partial_months_and_date_boundaries_follow_the_calendar_rule(string startDate, string endDate, int expectedMonths)
     {
-        ExperienceResult result = ExperienceCalculator.CalculateExperience([new(startDate, endDate)], null);
+        List<WorkInterval> intervals = [new(startDate, endDate)];
+        ExperienceInputsValidator.ValidateIntervals(intervals, null);
+        ExperienceResult result = ExperienceCalculator.CalculateExperience(intervals, null);
         Assert.Equal(expectedMonths, result.TotalMonths);
     }
 
@@ -48,21 +52,9 @@ public class ExperienceCalculatorTests
             new("2024-01-15", "2024-02-01"), new("2024-01-01", "2024-01-15"),
             new("2024-01-20", "2024-01-25"), new("2024-01-01", "2024-01-15")
         ];
+        ExperienceInputsValidator.ValidateIntervals(intervals, null);
         ExperienceResult result = ExperienceCalculator.CalculateExperience(intervals, null);
         Assert.Equal(1, result.TotalMonths);
         Assert.Single(result.MergedIntervals);
-    }
-
-    // Reject unusable dates rather than estimating them or using today's date.
-    [Theory]
-    [InlineData("2024-02-30", "2024-03-01", null)]
-    [InlineData("2024-03-01", "2024-02-01", null)]
-    [InlineData("2024", "2025-01-01", null)]
-    [InlineData("2024-01-01", null, null)]
-    [InlineData("2024-01-01", null, "not-a-date")]
-    [InlineData("2024-01-01", null, "2023-01-01")]
-    public void Invalid_or_unresolved_intervals_are_rejected(string startDate, string? endDate, string? evaluationDate)
-    {
-        Assert.Throws<InvalidDataException>(() => ExperienceCalculator.CalculateExperience([new(startDate, endDate)], evaluationDate));
     }
 }

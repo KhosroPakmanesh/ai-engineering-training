@@ -1,7 +1,5 @@
 using Xunit;
 
-// Run these classes one at a time because ProfileValidator stores shared data.
-[Collection("Profile validation")]
 public class ProfileValidatorTests
 {
     // Correct JSON structure does not guarantee that facts match the supplied source.
@@ -73,6 +71,49 @@ public class ProfileValidatorTests
         Assert.Contains("/experience/0/startDate: use a valid YYYY, YYYY-MM, or YYYY-MM-DD date, or null.",
             Assert.Throws<InvalidDataException>(() =>
                 ProfileValidator.ValidateProfile(invalid, SourceWithExperienceQuote(invalid), "resume.md")).Message);
+    }
+
+    // Start different source checks together; each accepted or rejected profile must keep its own result.
+    [Fact]
+    public async Task Concurrent_validations_keep_their_own_sources_and_errors()
+    {
+        List<(string Name, string Filename, bool Invalid)> cases =
+        [
+            ("Mira Example", "mira.md", false),
+            ("Alex Sample", "alex.md", true),
+            ("Robin Example", "robin.md", false),
+            ("Jamie Sample", "jamie.md", true)
+        ];
+        using var startGate = new Barrier(cases.Count);
+        // Dedicated workers can all reach the gate even when the test runner's thread pool is busy.
+        List<Task<Exception?>> checks = cases.Select(testCase => Task.Factory.StartNew<Exception?>(() =>
+        {
+            CandidateProfile profile = new(
+                Name: testCase.Name,
+                Email: null,
+                Phone: testCase.Invalid ? "unsupported phone" : null,
+                Evidence: new(testCase.Filename, testCase.Name),
+                Experience: [], Education: [], Skills: []);
+
+            startGate.SignalAndWait();
+            return Record.Exception(() => ProfileValidator.ValidateProfile(profile, testCase.Name, testCase.Filename));
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToList();
+
+        Exception?[] outcomes = await Task.WhenAll(checks);
+        for (int index = 0; index < cases.Count; index++)
+        {
+            if (cases[index].Invalid)
+            {
+                InvalidDataException error = Assert.IsType<InvalidDataException>(outcomes[index]);
+                string errorLine = Assert.Single(error.Message.Split(Environment.NewLine));
+                Assert.StartsWith("/evidence/quote:", errorLine);
+                Assert.Contains("an extracted fact is absent", errorLine);
+            }
+            else
+            {
+                Assert.Null(outcomes[index]);
+            }
+        }
     }
 
     // Change one job entry's dates and leave the other example facts unchanged.

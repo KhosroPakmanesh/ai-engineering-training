@@ -1,37 +1,41 @@
 # Function Calling: one small experiment
 
-Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, **ExperienceCalculator.cs** performs the arithmetic, and **ExperienceResultValidator.cs** checks that the final answer comes from a real tool execution.
+Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages. **ExperienceInputsLoader.cs** reads the jobs, **ExperienceInputsValidator.cs** checks the question and dates, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, and **ExperienceCalculator.cs** performs the arithmetic. **ToolExecutionValidator.cs** checks that the function really ran, and **ExperienceResultValidator.cs** checks the final total and citation.
 
 | Path | Concept |
 | --- | --- |
-| Direct invocation | C# calls `ExperienceCalculator.CalculateExperience` with known arguments. Deterministic tests exercise this path without an API. |
+| Direct invocation | C# validates known arguments with `ExperienceInputsValidator`, then calls `ExperienceCalculator.CalculateExperience`. Deterministic tests exercise this path without an API. |
 | Agent-mediated invocation | The model requests the registered function. Agent Framework converts its arguments, executes C#, sends the structured result back, and obtains the final answer. |
 
 Both paths use the same calculator and month-counting rule. The instruction tells the model to copy all supplied intervals and the explicit evaluation date, call the function exactly once, and cite `CalculateExperience.totalMonths`. The direct calculation is not supplied as a suggested answer. Change the dates to explore the arithmetic; keep them fixed when comparing the invocation paths. This lesson counts all supplied jobs rather than selecting roles from a resume.
 
 ## Execution flow
 
-Follow the arrows from top to bottom. Preparation checks the source inputs before a paid request. Tool arguments are checked against those inputs because a model can return different dates even when its JSON looks valid.
+Follow the arrows from top to bottom. Program.cs loads the source inputs and explicitly calls ExperienceInputsValidator.cs before making a paid request. Tool arguments are checked against those inputs because a model can return different dates even when its JSON looks valid.
 
 ```mermaid
 flowchart TD
-    A["Program.cs + ExperienceInputsLoader.cs<br/>Read fictional jobs, question, and evaluation date"] --> B{"ExperienceCalculator.cs<br/>Are all dates usable?"}
+    A["Program.cs + ExperienceInputsLoader.cs<br/>Read fictional jobs, question, and evaluation date"] --> B{"ExperienceInputsValidator.cs<br/>Are the question and dates usable?"}
     B -->|Yes| C["ExperienceAssistant.cs<br/>Prepare instruction, typed tool, and AiRequest"]
     C --> D["AiProvider.cs<br/>First model call with the available tool"]
     D --> E{"Did the model select CalculateExperience?"}
     E -->|Yes| F{"ExperienceAssistant.cs<br/>Do arguments match the supplied jobs and date?"}
     F -->|Yes| G["ExperienceCalculator.cs<br/>Sort, merge intervals, and count full months"]
     G --> H["AiToolSession.cs<br/>Record actual result; send it in the second model call"]
-    H --> I["Program.cs<br/>Check execution and read the typed result"]
-    I --> J{"ExperienceResultValidator.cs<br/>Does the answer report and cite the returned total?"}
+    H --> I{"ToolExecutionValidator.cs<br/>Did CalculateExperience execute exactly once?"}
+    I -->|Yes| P["Program.cs<br/>Read the structured result into a typed record"]
+    P --> J{"ExperienceResultValidator.cs<br/>Does the answer report and cite the returned total?"}
     J -->|Yes| K["Program.cs<br/>Print counts, timing, and accepted answer; exit 0"]
     B -->|No| X["Show the error and exit 1"]
     E -->|No| X
     F -->|No| X
+    I -->|No| X
     J -->|No| X
     D -->|API or budget error| X
     H -->|API or budget error| X
 ```
+
+Loading, validation, requests, and calculation are separate stages. ExperienceInputsLoader.cs reads the file and constructs the input records. ExperienceInputsValidator.cs rejects empty questions, missing jobs, invalid dates, unresolved current roles, and end dates before start dates. Callers must complete this validation before calling ExperienceAssistant.AskAsync or calculating directly. Those methods assume their source inputs have passed the checks. Tests follow the same order as Program.cs.
 
 Dates must be complete ISO dates such as `2024-02-01`. Each interval includes its start and excludes its end: February 1 to March 1 covers all of February. A month counts only when its entire calendar month is covered. January 15 to March 15 therefore counts February only. February 1 to February 29 excludes February's final day and counts zero months, even in a leap year. Equal start and end dates cover no time.
 
@@ -41,7 +45,7 @@ ExperienceAssistant.cs binds an ordinary C# callback to this run's original inpu
 
 The loop allows at most two model calls and one local tool execution. It rejects unknown functions, malformed arguments, excessive function batches, truncated responses, and another tool request on the final turn. Function errors stop before a follow-up model request. The facade retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
 
-Program.cs checks execution, converts the structured result into an `ExperienceResult`, and then checks the answer. Its deliberately small answer contract is `<integer> full calendar months [CalculateExperience.totalMonths].` The citation is literal text. Checking the complete sentence prevents additional unsupported totals from being accepted. Local check failures do not trigger repair requests.
+After the request, Program.cs calls ToolExecutionValidator.cs to check execution, converts the structured result into an `ExperienceResult`, and calls ExperienceResultValidator.cs to check the answer. Its deliberately small answer contract is `<integer> full calendar months [CalculateExperience.totalMonths].` The citation is literal text. Checking the complete sentence prevents additional unsupported totals from being accepted. Local check failures do not trigger repair requests.
 
 ## Run
 
@@ -97,10 +101,12 @@ The checks establish that the printed number matches an executed calculation ove
 
 ```text
 Program.cs                                      Question, evaluation date, and explicit acceptance flow
-ExperienceInputsLoader.cs                       Copied input loading and checks before paid requests
-ExperienceCalculator.cs                         Date validation, overlap merging, and month counting
+ExperienceInputsLoader.cs                       Copied input loading and input records
+ExperienceInputsValidator.cs                    Question, date, reference-date, and chronology checks
+ExperienceCalculator.cs                         Sorting, overlap merging, and calendar-month counting
 ExperienceAssistant.cs                          Prompt, tool callback, source checks, settings, and facade call
-ExperienceResultValidator.cs                    Real execution and exact total/citation checks
+ToolExecutionValidator.cs                       Exactly one real CalculateExperience execution
+ExperienceResultValidator.cs                    Exact total and citation checks
 Types/ExperienceInputs.cs                       Original intervals and question inputs
 Types/ExperienceResult.cs                       Merged intervals and structured calculation result
 SampleData/jobs.json                            Three fictional backend work intervals
@@ -116,18 +122,20 @@ function-calling.csproj                         .NET 10 application, copied inpu
 ../../shared/shared/.env.example                Shared credentials template
 ```
 
-Start with Program.cs. Read the calculator for the local rule, then ExperienceAssistant.cs for how the model receives that function. Read the shared session when you want to inspect SDK plumbing. The main requirements map to the calculator for arithmetic, the assistant and shared session for tool use, the result validator for grounding, and counterpart tests for failures and limits.
+Start with Program.cs and follow its separate loading and validation calls. Read the calculator for the local rule, then ExperienceAssistant.cs for how the model receives that function. Follow the execution check, typed conversion, and answer check in order. Read the shared session when you want to inspect SDK plumbing. Counterpart tests cover each stage's behavior and the complete request flow.
 
 ## Tests
 
-The project contains **31 cases: 30 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
+The project contains **30 cases: 29 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
 
 | Test file | Checks |
 | --- | --- |
-| [ExperienceInputsLoaderTests.cs](../function-calling.tests/ExperienceInputsLoaderTests.cs) | Missing or invalid evaluation dates, empty questions, and missing intervals. |
-| [ExperienceCalculatorTests.cs](../function-calling.tests/ExperienceCalculatorTests.cs) | Separate and overlapping jobs, current roles, leap dates, partial months, duplicates, touching intervals, unchanged inputs, and invalid chronology. |
-| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real agent invocation against local HTTP responses, source argument preservation, zero tool calls, invalid inputs preventing requests, and one complete live acceptance flow. |
-| [ExperienceResultValidatorTests.cs](../function-calling.tests/ExperienceResultValidatorTests.cs) | Actual execution required; wrong totals, missing citations, extra claims, and unexpected execution records rejected. |
+| [ExperienceInputsLoaderTests.cs](../function-calling.tests/ExperienceInputsLoaderTests.cs) | Copied jobs retain the selected question, evaluation date, and original work dates. |
+| [ExperienceInputsValidatorTests.cs](../function-calling.tests/ExperienceInputsValidatorTests.cs) | Empty questions, missing jobs, invalid or partial dates, unresolved current roles, and reversed chronology. |
+| [ExperienceCalculatorTests.cs](../function-calling.tests/ExperienceCalculatorTests.cs) | Validated separate and overlapping jobs, current roles, leap dates, partial months, duplicates, touching intervals, and unchanged inputs. |
+| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real agent invocation against local HTTP responses, source argument preservation, zero tool calls, explicit validation preventing requests, and one complete live acceptance flow. |
+| [ToolExecutionValidatorTests.cs](../function-calling.tests/ToolExecutionValidatorTests.cs) | Missing, wrong, and repeated tool executions are rejected. |
+| [ExperienceResultValidatorTests.cs](../function-calling.tests/ExperienceResultValidatorTests.cs) | Wrong totals, missing citations, and extra claims are rejected. |
 
 From the repository root, run local checks without credentials or API access:
 
@@ -135,7 +143,7 @@ From the repository root, run local checks without credentials or API access:
 dotnet test 04-function-calling/function-calling.tests/function-calling.tests.csproj --filter "Category!=Integration"
 ```
 
-The in-memory transport supplies scripted responses while the actual SDK and Agent Framework build messages and execute the real calculator. It is a test dependency, not an application mode. These tests make **zero real API requests**. Shared tool declarations, routing, thought signature preservation, budgets, malformed calls, and independent sessions are tested in [AiProviderTests.cs](../../shared/shared.tests/AiProviderTests.cs).
+The tests load inputs and call ExperienceInputsValidator explicitly before calculation or a model request, matching Program.cs. Input rejection assertions belong to the validator tests; loading tests check the copied data. The in-memory transport supplies scripted responses while the actual SDK and Agent Framework build messages and execute the real calculator. It is a test dependency, not an application mode. These tests make **zero real API requests**. Shared tool declarations, routing, thought signature preservation, budgets, malformed calls, and independent sessions are tested in [AiProviderTests.cs](../../shared/shared.tests/AiProviderTests.cs).
 
 Run the single real provider smoke test explicitly with:
 
@@ -149,6 +157,6 @@ Or run the complete project suite:
 dotnet test 04-function-calling/function-calling.tests/function-calling.tests.csproj
 ```
 
-Either command containing the integration case makes **two real model calls** on success, normally two HTTP requests and at most six HTTP attempts. It loads the same settings and jobs as the application, checks execution, reads the typed result, and validates the answer. Missing credentials, API errors, and rejected model output fail the test. The full repository suite also runs earlier integration tests; use `dotnet test AIEngineeringTraining.slnx --filter "Category!=Integration"` for local checks across all projects. All commands above work in PowerShell and macOS/Linux shells.
+Either command containing the integration case makes **two real model calls** on success, normally two HTTP requests and at most six HTTP attempts. It loads the same jobs, validates inputs, requests an answer with the same shared settings, checks execution, reads the typed result, and validates the answer. Missing credentials, API errors, and rejected model output fail the test. The full repository suite also runs earlier integration tests; use `dotnet test AIEngineeringTraining.slnx --filter "Category!=Integration"` for local checks across all projects. All commands above work in PowerShell and macOS/Linux shells.
 
 References: [Microsoft Agent Framework function tools](https://learn.microsoft.com/en-us/agent-framework/agents/tools/function-tools), [AIFunctionFactory.Create](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.aifunctionfactory.create), [FunctionInvokingChatClient](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.functioninvokingchatclient), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), [OpenRouter tool calling](https://openrouter.ai/docs/guides/features/tool-calling), and [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).

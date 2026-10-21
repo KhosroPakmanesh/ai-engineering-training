@@ -9,6 +9,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
     public async Task Agent_executes_the_calculator_and_grounds_its_final_answer()
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
         using ExperienceResponseHandler handler = ExperienceTestData.CreateHandler(inputs);
         using var httpClient = new HttpClient(handler);
         AiResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
@@ -35,6 +36,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
     public async Task Changed_tool_inputs_stop_before_another_model_request(string change)
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
         List<WorkInterval> changedIntervals = inputs.Intervals.ToList();
         string? changedReference = inputs.EvaluationDate;
         if (change == "date") changedIntervals[0] = changedIntervals[0] with { StartDate = "2010-01-01" };
@@ -54,6 +56,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
     public async Task A_fabricated_answer_without_tool_use_cannot_pass_the_pipeline()
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
         using var handler = new ExperienceResponseHandler(ExperienceTestData.CreateResponse("36 full calendar months [CalculateExperience.totalMonths]."));
         using var httpClient = new HttpClient(handler);
         AiResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
@@ -61,7 +64,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
         Assert.Single(handler.RequestBodies);
     }
 
-    // Loading invalid reference dates must fail before the injected transport receives anything.
+    // Follow Program.cs: explicit input validation must stop the request before the transport receives anything.
     [Theory]
     [InlineData(null)]
     [InlineData("invalid")]
@@ -70,8 +73,12 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
         using var handler = new ExperienceResponseHandler();
         using var httpClient = new HttpClient(handler);
-        await Assert.ThrowsAsync<InvalidDataException>(() => ExperienceAssistant.AskAsync(
-            inputs with { EvaluationDate = evaluationDate }, TestSettings(), httpClient));
+        ExperienceInputs invalidInputs = inputs with { EvaluationDate = evaluationDate };
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            ExperienceInputsValidator.ValidateInputs(invalidInputs);
+            await ExperienceAssistant.AskAsync(invalidInputs, TestSettings(), httpClient);
+        });
         Assert.Empty(handler.RequestBodies);
     }
 
@@ -81,6 +88,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
     public async Task Selected_provider_uses_the_real_calculator_and_returns_its_total()
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
         AiResponse response = await ExperienceAssistant.AskAsync(inputs);
         output.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
         ToolExecutionValidator.ValidateToolExecution(response);

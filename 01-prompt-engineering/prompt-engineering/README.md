@@ -103,7 +103,7 @@ The solution includes `prompt-engineering.tests`, a small [xUnit project](https:
 | [InputValidatorTests.cs](../prompt-engineering.tests/InputValidatorTests.cs) | Two local cases reject missing and empty prompts before any request. |
 | [ResumeSummarizerTests.cs](../prompt-engineering.tests/ResumeSummarizerTests.cs) | Three integration cases check a nonempty paragraph and the constrained prompt's word limit. |
 
-The integration tests call `ResumeSummarizer.SummarizeAsync`, just like the console app, and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+Before each integration request, the tests call `InputValidator.ValidateInputsAsync` for all three prompt files, matching the application's preparation step. A missing or empty later prompt therefore stops the test before its first paid request. The tests then call `ResumeSummarizer.SummarizeAsync` and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 

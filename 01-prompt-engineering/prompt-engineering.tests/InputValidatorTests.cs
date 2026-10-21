@@ -10,7 +10,7 @@ public class InputValidatorTests
             InputValidator.ValidateInputsAsync(["Prompts/does-not-exist.txt"]));
     }
 
-    // An empty prompt file must also stop the program before a model call.
+    // A later empty comparison case must stop preparation even when an earlier prompt is usable.
     [Fact]
     public async Task Empty_prompt_is_rejected_before_an_api_request()
     {
@@ -18,7 +18,12 @@ public class InputValidatorTests
         try
         {
             InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(() =>
-                InputValidator.ValidateInputsAsync([promptFile]));
+                InputValidator.ValidateInputsAsync(
+                [
+                    "Prompts/A-zero-shot.txt",
+                    promptFile
+                ]
+            ));
             Assert.Contains("The prompt instruction is empty.", error.Message);
         }
         finally

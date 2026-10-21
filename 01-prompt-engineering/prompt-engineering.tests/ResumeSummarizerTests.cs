@@ -12,6 +12,15 @@ public class ResumeSummarizerTests(ITestOutputHelper output)
     [Trait("Category", "Integration")]
     public async Task Prompts_return_one_paragraph_and_obey_word_limit(string promptFile, int? wordLimit)
     {
+        // Check the whole comparison before any case can spend a paid model request.
+        List<string> comparisonPromptFiles =
+        [
+            "Prompts/A-zero-shot.txt",
+            "Prompts/B-few-shot.txt",
+            "Prompts/C-constrained.txt"
+        ];
+        await InputValidator.ValidateInputsAsync(comparisonPromptFiles);
+
         string summary = await ResumeSummarizer.SummarizeAsync(promptFile);
         int wordCount = summary.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
         output.WriteLine(summary);
