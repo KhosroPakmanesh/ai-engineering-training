@@ -1,6 +1,6 @@
 # Function Calling: one small experiment
 
-Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages. **ExperienceInputsLoader.cs** reads the jobs, **ExperienceInputsValidator.cs** checks the question and dates, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, and **ExperienceCalculator.cs** performs the arithmetic. **ToolExecutionValidator.cs** checks that the function really ran, and **ExperienceResultValidator.cs** checks the final total and citation.
+Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages. **ExperienceInputsLoader.cs** reads the jobs, **ExperienceInputsValidator.cs** checks the question and dates, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, and **ExperienceCalculator.cs** performs the arithmetic. **ToolExecutionValidator.cs** checks that the function really ran, **ExperienceResponseParser.cs** reads the answer, calculation result, and call counts, and **ExperienceResultValidator.cs** checks the final total and citation.
 
 | Path | Concept |
 | --- | --- |
@@ -16,14 +16,16 @@ Follow the arrows from top to bottom. Program.cs loads the source inputs and exp
 ```mermaid
 flowchart TD
     A["Program.cs + ExperienceInputsLoader.cs<br/>Read fictional jobs, question, and evaluation date"] --> B{"ExperienceInputsValidator.cs<br/>Are the question and dates usable?"}
-    B -->|Yes| C["ExperienceAssistant.cs<br/>Prepare instruction, typed tool, and AiRequest"]
-    C --> D["AiProvider.cs<br/>First model call with the available tool"]
+    B -->|Yes| C["ExperienceAssistant.cs<br/>Create AIFunction and ChatClientAgent with ChatOptions"]
+    C --> D["ExperienceAssistant.cs<br/>Call agent.RunAsync; first model call with the available tool"]
     D --> E{"Did the model select CalculateExperience?"}
     E -->|Yes| F{"ExperienceAssistant.cs<br/>Do arguments match the supplied jobs and date?"}
     F -->|Yes| G["ExperienceCalculator.cs<br/>Sort, merge intervals, and count full months"]
-    G --> H["AiToolSession.cs<br/>Record actual result; send it in the second model call"]
-    H --> I{"ToolExecutionValidator.cs<br/>Did CalculateExperience execute exactly once?"}
-    I -->|Yes| P["Program.cs<br/>Read the structured result into a typed record"]
+    G --> H["FunctionInvokingChatClient<br/>Record FunctionResultContent; send the second model call"]
+    H --> R{"ExperienceAssistant.cs<br/>Is the final answer present and complete?"}
+    R -->|Yes| I{"ToolExecutionValidator.cs<br/>Did CalculateExperience execute exactly once?"}
+    R -->|No| X
+    I -->|Yes| P["ExperienceResponseParser.cs<br/>Read the final answer, typed result, and call counts"]
     P --> J{"ExperienceResultValidator.cs<br/>Does the answer report and cite the returned total?"}
     J -->|Yes| K["Program.cs<br/>Print counts, timing, and accepted answer; exit 0"]
     B -->|No| X["Show the error and exit 1"]
@@ -31,8 +33,8 @@ flowchart TD
     F -->|No| X
     I -->|No| X
     J -->|No| X
-    D -->|API or budget error| X
-    H -->|API or budget error| X
+    D -->|API or tool error| X
+    H -->|API or tool error| X
 ```
 
 Loading, validation, requests, and calculation are separate stages. ExperienceInputsLoader.cs reads the file and constructs the input records. ExperienceInputsValidator.cs rejects empty questions, missing jobs, invalid dates, unresolved current roles, and end dates before start dates. Callers must complete this validation before calling ExperienceAssistant.AskAsync or calculating directly. Those methods assume their source inputs have passed the checks. Tests follow the same order as Program.cs.
@@ -41,11 +43,11 @@ Dates must be complete ISO dates such as `2024-02-01`. Each interval includes it
 
 The calculator sorts intervals and merges overlaps, duplicates, and touching intervals before counting. Jobs covering January 1-15 and January 15-February 1 together cover one full January. A null `endDate` means a current role and requires the evaluation date declared in Program.cs. The program never uses today's date or invents missing date parts. The evaluation date replaces only missing end dates; completed jobs retain their stated end dates.
 
-ExperienceAssistant.cs binds an ordinary C# callback to this run's original inputs. It rejects changed, omitted, added, or reordered intervals and a changed evaluation date. The shared facade uses `AIFunctionFactory.Create` to generate the argument schema from that callback's parameter types. Agent Framework performs the actual invocation loop. Tool choice is automatic, so a model that answers without a tool is detected rather than treated as success.
+ExperienceAssistant.cs binds an ordinary C# callback to this run's original inputs. It rejects changed, omitted, added, or reordered intervals and a changed evaluation date. ExperienceAssistant.cs uses `AIFunctionFactory.Create` to generate the argument schema from that callback's parameter types. Agent Framework performs the actual invocation loop. Tool choice is automatic, so a model that answers without a tool is detected rather than treated as success.
 
-The loop allows at most two model calls and one local tool execution. It rejects unknown functions, malformed arguments, excessive function batches, truncated responses, and another tool request on the final turn. Function errors stop before a follow-up model request. The facade retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
+ExperienceAssistant.cs uses the framework's FunctionInvokingChatClient for one tool round trip: a model call to select the function, followed by a model call to explain its result. It handles argument conversion, calls the registered function, and sends the result back to the model. Function errors stop before a follow-up model request. The instruction requests one calculation, and ToolExecutionValidator checks that exactly one successful result was returned; this check runs after the conversation. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
 
-After the request, Program.cs calls ToolExecutionValidator.cs to check execution, converts the structured result into an `ExperienceResult`, and calls ExperienceResultValidator.cs to check the answer. Its deliberately small answer contract is `<integer> full calendar months [CalculateExperience.totalMonths].` The citation is literal text. Checking the complete sentence prevents additional unsupported totals from being accepted. Local check failures do not trigger repair requests.
+After RunAsync, ExperienceAssistant.cs checks the native finish reason and rejects empty final assistant text. Program.cs then calls ToolExecutionValidator.cs to check execution, ExperienceResponseParser.cs to read the final answer, typed calculation result, and call counts, and ExperienceResultValidator.cs to check the answer. The parser returns a `ParsedExperienceResponse` containing an `ExperienceResult` and excludes earlier assistant preambles from the answer. Its deliberately small answer contract is `<integer> full calendar months [CalculateExperience.totalMonths].` The citation is literal text. Checking the complete sentence prevents additional unsupported totals from being accepted. Local check failures do not trigger repair requests.
 
 ## Run
 
@@ -64,11 +66,11 @@ You can also select `function-calling` as the startup project in Visual Studio. 
 
 Running the application sends the question and fictional work intervals to the selected remote service: OpenRouter and its upstream provider, or Google's Gemini API through its OpenAI-compatible endpoint. It may charge your account. Restore, build, and deterministic tests do not make model requests. The application runs without command-line arguments; use the calculator tests for local arithmetic checks.
 
-A successful run makes **one facade request containing exactly two model calls and one local tool execution**. This normally sends two HTTP requests and permits at most **six HTTP attempts** with the shared two-retry policy. Early failures can stop after zero, one, or two model calls. The shared **120-second deadline covers the entire conversation**, including both turns, local execution, retries, and waits. ExperienceAssistant.cs declares temperature 0.1 and a 2,048-token output limit for each turn. Model calls, local executions, and HTTP retries are different counts.
+A successful run makes **one agent run containing exactly two model calls and one local tool execution**. This normally sends two HTTP requests and permits at most **six HTTP attempts** with the shared two-retry policy. Early failures can stop after zero, one, or two model calls. The shared **120-second deadline covers the entire conversation**, including both turns, local execution, retries, and waits. ExperienceAssistant.cs declares temperature 0.1 and a 2,048-token output limit for each turn. Model calls, local executions, and HTTP retries are different counts.
 
 Choose a Chat Completions model that supports function tools and the declared generation settings. OpenRouter requests require parameter support; Gemini receives no OpenRouter routing option. The shared library keeps the existing pinned versions: Microsoft.Agents.AI 1.25.0, Microsoft.Extensions.AI.OpenAI 10.11.0, OpenAI 2.14.0, and System.ClientModel 1.16.0.
 
-A missing or invalid reference date fails before an API request. Zero tool calls, unsupported tools, or a changed total or citation fail local checks. API errors use [AiProvider.cs](../../shared/shared/AiProvider.cs) to print the HTTP status and provider advice. For 401/403, check the selected key and permissions; for 402, check credits; for 404, check model availability; for 429 or 5xx, check quota or availability. A 400 can indicate unsupported settings or tools. The facade preserves the configured model and provider and uses the shared retries.
+A missing or invalid reference date fails before an API request. Zero tool calls, unsupported tools, or a changed total or citation fail local checks. The entry point prints the native SDK error message, including the provider details supplied by the SDK. For 401/403, check the selected key and permissions; for 402, check credits; for 404, check model availability; for 429 or 5xx, check quota or availability. A 400 can indicate unsupported settings or tools. The provider factory preserves the configured model and provider and uses the shared retries.
 
 ## Understand the results
 
@@ -84,9 +86,9 @@ Request time: 2400 ms
 36 full calendar months [CalculateExperience.totalMonths].
 ```
 
-Durations vary. The trace records the function name, redacted inputs, duration, and success status. It does not print original work dates or exception contents. AiResponse also carries the actual structured result: `totalMonths`, `inputIntervalCount`, and `mergedIntervals`. Program.cs prints the accepted answer and measurements; it does not save an output file. Integration test output includes the fictional structured result for inspection.
+Durations vary. The trace records the function name, redacted inputs, duration, and success status. It does not print original work dates or exception contents. The native AgentResponse contains FunctionCallContent and FunctionResultContent messages. The successful result carries `totalMonths`, `inputIntervalCount`, and `mergedIntervals`. Program.cs prints the accepted answer and measurements; it does not save an output file. Integration test output includes the fictional structured result for inspection.
 
-Request time includes both model turns and retry waits. Tool duration measures local execution and result conversion. A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy is resending that HTTP request; it does not mean another calculation ran. Missing provider usage remains null in AiResponse.
+Request time includes settings and agent setup, both model turns, local execution, and retry waits. ExperienceResponseParser.cs counts the returned assistant messages; with these Chat Completions clients, each message represents one completed model call. Tool duration measures the local source checks and calculation. A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy is resending that HTTP request; it does not mean another calculation ran. Native UsageDetails retains provider token counts when reported; missing counts remain unknown.
 
 The checks establish that the printed number matches an executed calculation over the supplied dates. You still decide whether those intervals represent the experience you intended to measure. The program does not extract dates from prose, infer job relevance, or establish that an employment claim is true.
 
@@ -95,7 +97,7 @@ The checks establish that the printed number matches an executed calculation ove
 1. Read [jobs.json](SampleData/jobs.json). Calculate each job separately, then predict the overlap-adjusted total. Run and compare your prediction with the merged count and accepted answer.
 2. Change one start date to the middle of a month and rebuild. Predict which whole calendar months remain covered after merging.
 3. Change `evaluationDate` in Program.cs. The current role should use that exact date. Try an invalid date and observe that the program stops before a model request.
-4. Read the direct calculator tests, then follow the same function through ExperienceAssistant.cs and the shared loop. Each successful run makes another two model calls, with at most six HTTP attempts.
+4. Read the direct calculator tests, then follow the same function through ExperienceAssistant.cs and its native framework loop. Each successful run makes another two model calls, with at most six HTTP attempts.
 
 ## Files to read
 
@@ -104,37 +106,36 @@ Program.cs                                      Question, evaluation date, and e
 ExperienceInputsLoader.cs                       Copied input loading and input records
 ExperienceInputsValidator.cs                    Question, date, reference-date, and chronology checks
 ExperienceCalculator.cs                         Sorting, overlap merging, and calendar-month counting
-ExperienceAssistant.cs                          Prompt, tool callback, source checks, settings, and facade call
+ExperienceAssistant.cs                          Prompt, tool callback, source checks, settings, and native agent call
 ToolExecutionValidator.cs                       Exactly one real CalculateExperience execution
+ExperienceResponseParser.cs                    Final assistant answer, typed calculation result, and call counts
 ExperienceResultValidator.cs                    Exact total and citation checks
 Types/ExperienceInputs.cs                       Original intervals and question inputs
 Types/ExperienceResult.cs                       Merged intervals and structured calculation result
+Types/ParsedExperienceResponse.cs               Parsed answer, calculation, and display counts
 SampleData/jobs.json                            Three fictional backend work intervals
 function-calling.csproj                         .NET 10 application, copied inputs, and shared reference
 ../function-calling.tests/                      Counterpart tests and fresh test fixtures
 ../../shared/shared/SettingsReader.cs           Shared settings loading
-../../shared/shared/AiProvider.cs                Client, agent, routing, deadline, and API errors
-../../shared/shared/AiRequest.cs                 Lesson request with optional tool configuration
-../../shared/shared/AiResponse.cs                Text, usage, timing, model calls, and executions
-../../shared/shared/AiToolCalling.cs             SDK-independent tool, budget, and execution records
-../../shared/shared/AiToolSession.cs             SDK function loop, schemas, limits, and redacted tracing
-../../shared/shared/AiRetryPolicy.cs             Bounded HTTP retries
+../../shared/shared/AiClientFactory.cs           Provider connections, routing, and tool metadata
+../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy
 ../../shared/shared/.env.example                Shared credentials template
 ```
 
-Start with Program.cs and follow its separate loading and validation calls. Read the calculator for the local rule, then ExperienceAssistant.cs for how the model receives that function. Follow the execution check, typed conversion, and answer check in order. Read the shared session when you want to inspect SDK plumbing. Counterpart tests cover each stage's behavior and the complete request flow.
+Start with Program.cs and follow its separate loading and validation calls. Read the calculator for the local rule, then ExperienceAssistant.cs for how the model receives that function. Follow the execution check, ExperienceResponseParser.cs conversion, and answer check in order. Read the native loop settings in ExperienceAssistant.cs and AiClientFactory.cs for provider compatibility. Counterpart tests cover each stage's behavior and the complete request flow.
 
 ## Tests
 
-The project contains **30 cases: 29 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
+The project contains **37 cases: 36 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
 
 | Test file | Checks |
 | --- | --- |
 | [ExperienceInputsLoaderTests.cs](../function-calling.tests/ExperienceInputsLoaderTests.cs) | Copied jobs retain the selected question, evaluation date, and original work dates. |
 | [ExperienceInputsValidatorTests.cs](../function-calling.tests/ExperienceInputsValidatorTests.cs) | Empty questions, missing jobs, invalid or partial dates, unresolved current roles, and reversed chronology. |
 | [ExperienceCalculatorTests.cs](../function-calling.tests/ExperienceCalculatorTests.cs) | Validated separate and overlapping jobs, current roles, leap dates, partial months, duplicates, touching intervals, and unchanged inputs. |
-| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real agent invocation against local HTTP responses, source argument preservation, zero tool calls, explicit validation preventing requests, and one complete live acceptance flow. |
-| [ToolExecutionValidatorTests.cs](../function-calling.tests/ToolExecutionValidatorTests.cs) | Missing, wrong, and repeated tool executions are rejected. |
+| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real native requests, the framework iteration limit, source preservation, empty or truncated final answers, zero tool calls, validation preventing requests, and one complete live acceptance flow. |
+| [ToolExecutionValidatorTests.cs](../function-calling.tests/ToolExecutionValidatorTests.cs) | Missing, wrong, failed, and repeated native function results are rejected. |
+| [ExperienceResponseParserTests.cs](../function-calling.tests/ExperienceResponseParserTests.cs) | Final answer selection, typed results, model/tool counts, and rejection of a null calculation result. |
 | [ExperienceResultValidatorTests.cs](../function-calling.tests/ExperienceResultValidatorTests.cs) | Wrong totals, missing citations, and extra claims are rejected. |
 
 From the repository root, run local checks without credentials or API access:
@@ -143,7 +144,7 @@ From the repository root, run local checks without credentials or API access:
 dotnet test 04-function-calling/function-calling.tests/function-calling.tests.csproj --filter "Category!=Integration"
 ```
 
-The tests load inputs and call ExperienceInputsValidator explicitly before calculation or a model request, matching Program.cs. Input rejection assertions belong to the validator tests; loading tests check the copied data. The in-memory transport supplies scripted responses while the actual SDK and Agent Framework build messages and execute the real calculator. It is a test dependency, not an application mode. These tests make **zero real API requests**. Shared tool declarations, routing, thought signature preservation, budgets, malformed calls, and independent sessions are tested in [AiProviderTests.cs](../../shared/shared.tests/AiProviderTests.cs).
+The tests load inputs and call ExperienceInputsValidator explicitly before calculation or a model request, matching Program.cs. Input rejection assertions belong to the validator tests; loading tests check the copied data. The in-memory transport supplies scripted responses while the actual SDK and Agent Framework build messages and execute the real calculator. It is a test dependency, not an application mode. These tests make **zero real API requests**. Native tool declarations, provider routing, and thought signature preservation are tested in [AiClientFactoryTests.cs](../../shared/shared.tests/AiClientFactoryTests.cs).
 
 Run the single real provider smoke test explicitly with:
 
@@ -157,6 +158,6 @@ Or run the complete project suite:
 dotnet test 04-function-calling/function-calling.tests/function-calling.tests.csproj
 ```
 
-Either command containing the integration case makes **two real model calls** on success, normally two HTTP requests and at most six HTTP attempts. It loads the same jobs, validates inputs, requests an answer with the same shared settings, checks execution, reads the typed result, and validates the answer. Missing credentials, API errors, and rejected model output fail the test. The full repository suite also runs earlier integration tests; use `dotnet test AIEngineeringTraining.slnx --filter "Category!=Integration"` for local checks across all projects. All commands above work in PowerShell and macOS/Linux shells.
+Either command containing the integration case makes **two real model calls** on success, normally two HTTP requests and at most six HTTP attempts. It loads the same jobs, validates inputs, requests an answer with the same shared settings, checks execution, reads the typed result through ExperienceResponseParser.cs, and validates the answer. Missing credentials, API errors, and rejected model output fail the test. The full repository suite also runs earlier integration tests; use `dotnet test AIEngineeringTraining.slnx --filter "Category!=Integration"` for local checks across all projects. All commands above work in PowerShell and macOS/Linux shells.
 
 References: [Microsoft Agent Framework function tools](https://learn.microsoft.com/en-us/agent-framework/agents/tools/function-tools), [AIFunctionFactory.Create](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.aifunctionfactory.create), [FunctionInvokingChatClient](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.functioninvokingchatclient), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), [OpenRouter tool calling](https://openrouter.ai/docs/guides/features/tool-calling), and [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).

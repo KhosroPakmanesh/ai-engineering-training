@@ -1,40 +1,37 @@
-using System.Text.Json;
+using System.Diagnostics;
+using Microsoft.Agents.AI;
 
 const string question = "How many full calendar months of backend experience do these fictional jobs cover?";
 const string evaluationDate = "2023-04-01";
 
 try
 {
-    // Find unusable job dates before sending the question and source data to the model.
+    // Load and validate the source inputs before making a model request.
     ExperienceInputs inputs = await ExperienceInputsLoader.LoadAsync(question, evaluationDate);
-
-    // Validate the inputs before sending them to the model; the model does not validate them.
     ExperienceInputsValidator.ValidateInputs(inputs);
 
-    // The model chooses the tool; its local function performs the arithmetic.
-    AiResponse response = await ExperienceAssistant.AskAsync(inputs);
+    // The model selects the tool, and the framework executes the C# function.
+    var timer = Stopwatch.StartNew();
+    AgentResponse response = await ExperienceAssistant.AskAsync(inputs);
+    timer.Stop();
 
-    // Accept a result only after it was confirmed that the function really ran.
+    // Confirm that the calculator really executed successfully.
     ToolExecutionValidator.ValidateToolExecution(response);
 
-    ExperienceResult result = response.ToolExecutions[0].Result.Deserialize<ExperienceResult>(
-        new JsonSerializerOptions(JsonSerializerDefaults.Web))
-        ?? throw new InvalidDataException("The calculation returned no structured result.");
+    // Read the final answer, typed calculation result, and call counts.
+    ParsedExperienceResponse parsedResponse = ExperienceResponseParser.Parse(response);
+    ExperienceResult result = parsedResponse.Result;
 
-        // Check the model's final number and citation against the actual tool result.
-    ExperienceResultValidator.ValidateAnswer(response.Text, result);
+    // Check the final answer's total and citation against the calculation.
+    ExperienceResultValidator.ValidateAnswer(parsedResponse.Answer, result);
 
+    // Show the calculation counts, request measurements, and accepted answer.
     Console.WriteLine($"Input intervals: {result.InputIntervalCount}; merged intervals: {result.MergedIntervals.Count}");
-    Console.WriteLine($"Model calls: {response.ModelCalls}; tool executions: {response.ToolExecutions.Count}");
-    Console.WriteLine($"Request time: {response.LatencyMilliseconds} ms");
-    Console.WriteLine(response.Text);
+    Console.WriteLine($"Model calls: {parsedResponse.ModelCallCount}; tool executions: {parsedResponse.ToolExecutionCount}");
+    Console.WriteLine($"Request time: {timer.ElapsedMilliseconds} ms");
+    Console.WriteLine(parsedResponse.Answer);
 
     return 0;
-}
-catch (AiRequestException error)
-{
-    AiProvider.WriteError(error);
-    return 1;
 }
 catch (OperationCanceledException)
 {

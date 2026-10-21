@@ -1,4 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 public static class ExperienceAssistant
 {
@@ -20,7 +25,7 @@ public static class ExperienceAssistant
         """;
 
     // Use the selected shared provider; a tool conversation starts without earlier lesson runs.
-    public static async Task<AiResponse> AskAsync(ExperienceInputs inputs, CancellationToken cancellationToken = default)
+    public static async Task<AgentResponse> AskAsync(ExperienceInputs inputs, CancellationToken cancellationToken = default)
     {
         ProviderSettings settings = await SettingsReader
             .ReadSettingsAsync(AppContext.BaseDirectory, cancellationToken);
@@ -29,43 +34,96 @@ public static class ExperienceAssistant
     }
 
     // Tests replace only the HTTP transport; the same request, agent, and real function loop still run.
-    internal static async Task<AiResponse> AskAsync(ExperienceInputs inputs, ProviderSettings settings,
+    internal static async Task<AgentResponse> AskAsync(ExperienceInputs inputs, ProviderSettings settings,
         HttpClient? httpClient, CancellationToken cancellationToken = default)
     {
         string input = JsonSerializer.Serialize
             (inputs, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        AiTool tool = new(
-            Name: ToolName,
-            Description: 
-                "Count full calendar months in all supplied work intervals. " +
-                "Merge overlapping and touching intervals. " +
-                "Dates use yyyy-MM-dd; endDate is exclusive. " +
-                "A null endDate requires the supplied evaluationDate.",
-            Function: (List<WorkInterval> intervals, string? evaluationDate) =>
-                CalculateForSource(inputs, intervals, evaluationDate));
+        // The framework derives the tool's argument schema from these C# parameter types.
+        AIFunction tool = AIFunctionFactory.Create(
+            (List<WorkInterval> intervals, string? evaluationDate) => CalculateForSource(inputs, intervals, evaluationDate),
+            new AIFunctionFactoryOptions
+            {
+                Name = ToolName,
+                Description =
+                    "Count full calendar months in all supplied work intervals. " +
+                    "Merge overlapping and touching intervals. " +
+                    "Dates use yyyy-MM-dd; endDate is exclusive. " +
+                    "A null endDate requires the supplied evaluationDate.",
+                SerializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                {
+                    TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+                    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+                }
+            });
 
-        AiRequest request = new(
-            Name: "ExperienceAssistant",
-            Instructions: Instructions,
-            Input: input,
-            Temperature: Temperature,
-            MaxOutputTokens: MaxOutputTokens)
+        // Let the framework call the function and send its result back to the model.
+        var factory = new AiClientFactory();
+        using IChatClient client = new FunctionInvokingChatClient(factory.CreateClient(settings, httpClient))
         {
-            ToolCalling = new(Tools: [tool], MaxModelCalls: MaxModelCalls, MaxToolCalls: 1)
+            // One tool round trip: select the function, then request the final answer.
+            MaximumIterationsPerRequest = 1,
+            MaximumConsecutiveErrorsPerRequest = 0,
+            AllowConcurrentInvocation = false,
+            TerminateOnUnknownCalls = true
         };
+        ChatClientAgent agent = new(client, new ChatClientAgentOptions
+        {
+            Name = "ExperienceAssistant",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = Instructions,
+                Temperature = Temperature,
+                MaxOutputTokens = MaxOutputTokens,
+                Tools = [tool],
+                ToolMode = ChatToolMode.Auto,
+                AllowMultipleToolCalls = false
+            },
+            UseProvidedChatClientAsIs = true
+        });
 
         Console.WriteLine($"Model: {settings.Model}. Sending fictional work dates to {settings.Name} " +
-            $"(up to {MaxModelCalls} model calls, up to {AiProvider.MaxRetries} HTTP retries per call).");
+            $"(up to {MaxModelCalls} model calls, up to {AiClientFactory.MaxRetries} HTTP retries per call).");
 
-        return await AiProvider.RequestAsync(settings, request, httpClient, cancellationToken);
+        // All turns, the local calculator, and retry waits share the same deadline.
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
+
+        AgentResponse response = await agent.RunAsync(input, cancellationToken: deadline.Token);
+
+        // A tool-selection preamble cannot replace a complete final assistant answer.
+        if (response.FinishReason == ChatFinishReason.Length)
+            throw new InvalidDataException("The provider truncated its response at the output token limit.");
+        string? answer = response.Messages.LastOrDefault(message => message.Role == ChatRole.Assistant)?.Text;
+        if (string.IsNullOrWhiteSpace(answer))
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
+
+        return response;
     }
 
     // A valid date can still be invented: accept only the exact intervals and reference date supplied.
     private static ExperienceResult CalculateForSource(ExperienceInputs source, List<WorkInterval> intervals, string? evaluationDate)
     {
-        if (intervals is null || evaluationDate != source.EvaluationDate || !intervals.SequenceEqual(source.Intervals))
-            throw new InvalidDataException("Tool arguments must preserve every supplied interval and the evaluation date.");
-        return ExperienceCalculator.CalculateExperience(intervals, evaluationDate);
+        var timer = Stopwatch.StartNew();
+        bool succeeded = false;
+        try
+        {
+            if (intervals is null || evaluationDate != source.EvaluationDate || !intervals.SequenceEqual(source.Intervals))
+                throw new InvalidDataException("Tool arguments must preserve every supplied interval and the evaluation date.");
+
+            ExperienceResult result = ExperienceCalculator.CalculateExperience(intervals, evaluationDate);
+            succeeded = true;
+
+            return result;
+        }
+        finally
+        {
+            // Keep private arguments and exception contents out of the execution log.
+            Console.WriteLine($"tool_name={ToolName} inputs=[redacted] duration_ms={timer.ElapsedMilliseconds} succeeded={succeeded}");
+        }
     }
+
 }

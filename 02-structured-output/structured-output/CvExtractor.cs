@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 public static class CvExtractor
 {
@@ -22,7 +24,7 @@ public static class CvExtractor
         Return only JSON matching this schema:
         """ + "\n" + schema;
 
-    // Keep the prompt and settings here; let AiProvider handle the model call.
+    // Show the framework's schema request beside the lesson's prompt and settings.
     public static async Task<string> ExtractAsync(string rawStringResume, string resumeFileName,
         CancellationToken cancellationToken = default)
     {
@@ -41,18 +43,38 @@ public static class CvExtractor
                 cv = rawStringResume
             });
 
-        AiRequest request = new(
-            Name: "CvExtractor",
-            Instructions: BuildInstruction(resumeSchema),
-            Input: input,
-            Temperature: Temperature,
-            MaxOutputTokens: MaxOutputTokens,
-            ResponseSchema: new("CandidateProfile", resumeSchema));
+        var factory = new AiClientFactory();
+        using IChatClient client = factory.CreateClient(settings);
+        ChatClientAgent agent = new(client, new ChatClientAgentOptions
+        {
+            Name = "CvExtractor",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = BuildInstruction(resumeSchema),
+                Temperature = Temperature,
+                MaxOutputTokens = MaxOutputTokens,
+                ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonElement.Parse(resumeSchema), "CandidateProfile"),
+                AdditionalProperties = new() { ["strict"] = true }
+            }
+        });
 
         Console.WriteLine($"Model: {settings.Model}. Sending the fictional CV to {settings.Name}" +
-            $" (one model call, up to {AiProvider.MaxRetries} retries).");
+            $" (one model call, up to {AiClientFactory.MaxRetries} retries).");
 
-        AiResponse response = await AiProvider.RequestAsync(settings, request, cancellationToken);
-        return response.Text;
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
+
+        AgentResponse response = await agent.RunAsync(input, cancellationToken: deadline.Token);
+
+        // Check completeness before the separate schema and evidence stages accept the JSON.
+        if (response.FinishReason == ChatFinishReason.Length)
+            throw new InvalidDataException("The provider truncated its response at the output token limit.");
+        string? answer = response.Messages.LastOrDefault(message => message.Role == ChatRole.Assistant)?.Text;
+        if (string.IsNullOrWhiteSpace(answer))
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
+
+        return answer;
     }
 }

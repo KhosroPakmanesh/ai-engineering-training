@@ -1,3 +1,7 @@
+using System.Diagnostics;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
 public static partial class ContextComparer
 {
     private const float Temperature = 0.2f;
@@ -13,7 +17,7 @@ public static partial class ContextComparer
 
         Console.WriteLine(
             $"Model: {settings.Model}. Sending fictional project excerpts to " +
-            $"{settings.Name} (two model calls, up to {AiProvider.MaxRetries} retries per call).");
+            $"{settings.Name} (two model calls, up to {AiClientFactory.MaxRetries} retries per call).");
 
         var results = new List<ContextResult>();
         foreach (PreparedContext preparedContext in preparedContexts)
@@ -40,24 +44,49 @@ public static partial class ContextComparer
     private static async Task<ContextResult> RunContextAsync(
         ProviderSettings settings, PreparedContext context, List<string>? expectedIds, CancellationToken cancellationToken)
     {
-        AiRequest request = new(
-            Name: "ResumeContext",
-            Instructions: ContextCreatorHelpers.SystemInstructions,
-            Input: context.Prompt,
-            Temperature: Temperature,
-            MaxOutputTokens: MaxOutputTokens);
+        var factory = new AiClientFactory();
+        using IChatClient client = factory.CreateClient(settings);
+        ChatClientAgent agent = new(client, new ChatClientAgentOptions
+        {
+            Name = "ResumeContext",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = ContextCreatorHelpers.SystemInstructions,
+                Temperature = Temperature,
+                MaxOutputTokens = MaxOutputTokens
+            }
+        });
 
-        AiResponse response = await AiProvider
-            .RequestAsync(settings, request, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
 
-        return CreateResult(context, response, expectedIds);
+        var timer = Stopwatch.StartNew();
+        AgentResponse response = await agent.RunAsync(context.Prompt, cancellationToken: deadline.Token);
+        timer.Stop();
+
+        // Preserve both comparison results only when each response is present and complete.
+        if (response.FinishReason == ChatFinishReason.Length)
+            throw new InvalidDataException("The provider truncated its response at the output token limit.");
+        string? answer = response.Messages.LastOrDefault(message => message.Role == ChatRole.Assistant)?.Text;
+        if (string.IsNullOrWhiteSpace(answer))
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
+
+        return CreateResult(context, answer, response.Usage, timer.ElapsedMilliseconds, expectedIds);
     }
     // Keep failed evidence checks with the answer so both results can still be compared.
     private static ContextResult CreateResult(
-    PreparedContext prepared, AiResponse response, List<string>? expectedIds)
+        PreparedContext prepared, string responseText, UsageDetails? usage,
+        long latencyMilliseconds, List<string>? expectedIds)
     {
         ContextStrategy context = prepared.Context;
-        string answer = response.Text.Trim();
+        string answer = responseText.Trim();
+
+        // Missing measurements mean unknown, even when the framework returns an empty usage object.
+        TokenUsage? providerUsage = usage is null ||
+            (usage.InputTokenCount is null && usage.OutputTokenCount is null && usage.TotalTokenCount is null)
+            ? null : new(usage.InputTokenCount, usage.OutputTokenCount, usage.TotalTokenCount);
 
         List<string> includedIds = context.Sections.Select(section => section.Id).ToList();
         int promptCharacters = ContextCreatorHelpers.SystemInstructions.Length + prepared.Prompt.Length;
@@ -68,8 +97,8 @@ public static partial class ContextComparer
             ContextCharacters: context.Text.Length,
             PromptCharacters: promptCharacters,
             EstimatedPromptTokens: (int)Math.Ceiling(promptCharacters / 4.0),
-            ProviderUsage: response.Usage is { } usage ? new(usage.InputTokens, usage.OutputTokens, usage.TotalTokens) : null,
-            LatencyMilliseconds: response.LatencyMilliseconds,
+            ProviderUsage: providerUsage,
+            LatencyMilliseconds: latencyMilliseconds,
             SourceRecall: CalculateSourceRecall(includedIds, expectedIds),
             Response: answer,
             CitedSectionIds: ContextEvidenceChecker.CitedIds(answer),

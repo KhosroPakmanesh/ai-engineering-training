@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -12,13 +15,15 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
         ExperienceInputsValidator.ValidateInputs(inputs);
         using ExperienceResponseHandler handler = ExperienceTestData.CreateHandler(inputs);
         using var httpClient = new HttpClient(handler);
-        AiResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
+        AgentResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
 
         ToolExecutionValidator.ValidateToolExecution(response);
-        ExperienceResult result = response.ToolExecutions[0].Result.Deserialize<ExperienceResult>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        ExperienceResultValidator.ValidateAnswer(response.Text, result);
+        ParsedExperienceResponse parsedResponse = ExperienceResponseParser.Parse(response);
+        ExperienceResult result = parsedResponse.Result;
+        ExperienceResultValidator.ValidateAnswer(parsedResponse.Answer, result);
         Assert.Equal(36, result.TotalMonths);
-        Assert.Equal(2, response.ModelCalls);
+        Assert.Equal(2, parsedResponse.ModelCallCount);
+        Assert.Equal(1, parsedResponse.ToolExecutionCount);
         Assert.Equal(2, handler.RequestBodies.Count);
         using JsonDocument secondRequest = JsonDocument.Parse(handler.RequestBodies[1]);
         JsonElement toolMessage = secondRequest.RootElement.GetProperty("messages").EnumerateArray()
@@ -26,6 +31,50 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
         Assert.Contains("36", toolMessage.GetProperty("content").GetString());
         using JsonDocument firstRequest = JsonDocument.Parse(handler.RequestBodies[0]);
         Assert.Contains(inputs.Question, firstRequest.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
+    }
+
+    // The framework's iteration setting stops a model that keeps requesting the tool.
+    [Fact]
+    public async Task Framework_stops_after_two_model_calls()
+    {
+        ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
+        string arguments = JsonSerializer.Serialize(new { intervals = inputs.Intervals, evaluationDate = inputs.EvaluationDate },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        string toolResponse = ExperienceTestData.CreateResponse(null, arguments);
+        // Keep final text usable so this case checks the loop limit independently of response checks.
+        using var handler = new ExperienceResponseHandler(toolResponse,
+            ExperienceTestData.CreateResponse("36 full calendar months [CalculateExperience.totalMonths].", arguments));
+        using var httpClient = new HttpClient(handler);
+
+        AgentResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
+
+        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.Single(response.Messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>());
+    }
+
+    // Earlier assistant text must not hide a missing or cut-short final answer.
+    [Theory]
+    [InlineData("length", "36 full calendar months [CalculateExperience.totalMonths].", "truncated")]
+    [InlineData("stop", null, "no response text")]
+    public async Task Unusable_final_answers_are_rejected_before_returning(
+        string finishReason, string? answer, string expectedError)
+    {
+        ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
+        ExperienceInputsValidator.ValidateInputs(inputs);
+        string arguments = JsonSerializer.Serialize(new { intervals = inputs.Intervals, evaluationDate = inputs.EvaluationDate },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        JsonNode finalResponse = JsonNode.Parse(ExperienceTestData.CreateResponse(answer))!;
+        finalResponse["choices"]![0]!["finish_reason"] = finishReason;
+        using var handler = new ExperienceResponseHandler(
+            ExperienceTestData.CreateResponse("I will use the calculator.", arguments), finalResponse.ToJsonString());
+        using var httpClient = new HttpClient(handler);
+
+        InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient));
+
+        Assert.Contains(expectedError, error.Message);
+        Assert.Equal(2, handler.RequestBodies.Count);
     }
 
     // Dates that look valid must still be rejected when the model changes, drops, or invents source inputs.
@@ -59,7 +108,7 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
         ExperienceInputsValidator.ValidateInputs(inputs);
         using var handler = new ExperienceResponseHandler(ExperienceTestData.CreateResponse("36 full calendar months [CalculateExperience.totalMonths]."));
         using var httpClient = new HttpClient(handler);
-        AiResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
+        AgentResponse response = await ExperienceAssistant.AskAsync(inputs, TestSettings(), httpClient);
         Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
         Assert.Single(handler.RequestBodies);
     }
@@ -89,14 +138,17 @@ public class ExperienceAssistantTests(ITestOutputHelper output)
     {
         ExperienceInputs inputs = await ExperienceTestData.ReadInputsAsync();
         ExperienceInputsValidator.ValidateInputs(inputs);
-        AiResponse response = await ExperienceAssistant.AskAsync(inputs);
-        output.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+        AgentResponse response = await ExperienceAssistant.AskAsync(inputs);
         ToolExecutionValidator.ValidateToolExecution(response);
-        ExperienceResult result = response.ToolExecutions[0].Result.Deserialize<ExperienceResult>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        ExperienceResultValidator.ValidateAnswer(response.Text, result);
+        ParsedExperienceResponse parsedResponse = ExperienceResponseParser.Parse(response);
+        ExperienceResult result = parsedResponse.Result;
+        ExperienceResultValidator.ValidateAnswer(parsedResponse.Answer, result);
+        output.WriteLine(parsedResponse.Answer);
+        output.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
         Assert.Equal(36, result.TotalMonths);
         Assert.Equal(2, result.MergedIntervals.Count);
-        Assert.Equal(2, response.ModelCalls);
+        Assert.Equal(2, parsedResponse.ModelCallCount);
+        Assert.Equal(1, parsedResponse.ToolExecutionCount);
     }
 
     // Made-up credentials are sufficient when only the HTTP transport is replaced.

@@ -1,4 +1,4 @@
-﻿public static class SettingsReader
+public static class SettingsReader
 {
     // Read the copied settings so console runs and tests use the same configuration.
     public static async Task<ProviderSettings> ReadSettingsAsync(
@@ -14,17 +14,13 @@
     public static ProviderSettings ParseSettings(IEnumerable<string> lines)
     {
         Dictionary<string, string> settings = ReadValues(lines);
-        string provider = settings.GetValueOrDefault("AI_PROVIDER", "openrouter").ToLowerInvariant();
-        (string name, string prefix, string endpoint) = provider switch
-        {
-            "openrouter" => ("OpenRouter", "OPENROUTER", "https://openrouter.ai/api/v1"),
-            "gemini" => ("Gemini", "GEMINI", "https://generativelanguage.googleapis.com/v1beta/openai/"),
-            _ => throw new InvalidOperationException("Set AI_PROVIDER to openrouter or gemini in shared/shared/.env, then rebuild. No requests were made.")
-        };
+        var factory = new AiClientFactory();
+        IAiProviderStrategy provider = factory.SelectProvider(settings.GetValueOrDefault("AI_PROVIDER", "openrouter"));
+        string prefix = provider.SettingsPrefix;
         if (!settings.TryGetValue($"{prefix}_API_KEY", out string? key) || string.IsNullOrWhiteSpace(key) || key == "your-key" ||
             !settings.TryGetValue($"{prefix}_MODEL", out string? model) || string.IsNullOrWhiteSpace(model) || model is "your-model" or "your-model-id")
             throw new InvalidOperationException($"Fill in {prefix}_API_KEY and {prefix}_MODEL in shared/shared/.env, then rebuild. No requests were made.");
-        return new(name, key, model, new Uri(endpoint));
+        return new(provider.Name, key, model, provider.Endpoint);
     }
     // Split only at the first equals sign because a setting value may contain another.
     private static Dictionary<string, string> ReadValues(IEnumerable<string> lines)

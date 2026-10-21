@@ -1,6 +1,6 @@
 # Prompt Engineering: one small experiment
 
-Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** lists the prompts and starts the comparison. **InputValidator.cs** checks the source files, **PromptComparer.cs** runs the loop and prints word counts, and **ResumeSummarizer.cs** supplies each request's prompts and generation settings to the shared AiProvider facade. The facade calls the selected model and returns the checked answer.
+Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** lists the prompts and starts the comparison. **InputValidator.cs** checks the source files, **PromptComparer.cs** runs the loop and prints word counts, and **ResumeSummarizer.cs** creates a ChatClientAgent with the prompts and generation settings, calls RunAsync, and checks the final answer.
 
 | Prompt file | Concept |
 | --- | --- |
@@ -18,18 +18,18 @@ Follow the arrows from top to bottom. InputValidator.cs checks every input file 
 flowchart TD
     A["Program.cs<br/>List prompts A, B and C"] --> B["InputValidator.cs<br/>Check the resume and all prompts"]
     B --> C["PromptComparer.cs<br/>Choose the next prompt"]
-    C --> D["ResumeSummarizer.cs + SettingsReader.cs<br/>Read inputs and settings; prepare AiRequest"]
-    D --> E["ResumeSummarizer.cs + AiProvider.cs<br/>Call RequestAsync: one independent model call"]
-    E --> F["AiProvider.cs<br/>Check that the answer is nonempty and not cut short"]
+    C --> D["ResumeSummarizer.cs + SettingsReader.cs<br/>Read inputs and settings; create ChatClientAgent"]
+    D --> E["ResumeSummarizer.cs<br/>Call agent.RunAsync: one independent model call"]
+    E --> F["ResumeSummarizer.cs<br/>Check that the answer is nonempty and not cut short"]
     F --> G["PromptComparer.cs<br/>Print the summary and its word count"]
     G --> H{"More prompts?"}
     H -->|Yes| C
     H -->|No| I["Finish after three model calls"]
 ```
 
-Each pass uses the same resume, model, and settings with a fresh conversation. ResumeSummarizer.cs declares an `AiRequest` with the system instruction, prompt plus resume, temperature, and output limit, then calls `AiProvider.RequestAsync`. The facade sends the instruction as a system message and the prompt plus resume as a user message without saved conversation history. Earlier summaries are not sent to the next request. A missing input, failed request, or rejected response stops the program before the later prompts run.
+Each pass uses the same resume, model, and settings with a fresh conversation. ResumeSummarizer.cs declares the system instruction, temperature, and output limit in ChatOptions. It asks [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) for an IChatClient, creates a ChatClientAgent, and calls RunAsync with the prompt plus resume. The framework sends the instruction as a system message and the prompt plus resume as a user message. Earlier summaries are not sent to the next request. ResumeSummarizer.cs checks the native finish reason and final assistant text, rejecting an empty or cut-short answer. A linked CancellationTokenSource covers the complete RunAsync call. A missing input, failed request, or rejected response stops the program before the later prompts run.
 
-The [shared retry policy](../../shared/shared/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside one agent call. It keeps the same prompt and settings; the comparison loop advances only after a usable answer.
+The [shared retry policy](../../shared/shared/Providers/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside one agent call. It keeps the same prompt and settings; the comparison loop advances only after a usable answer.
 
 ## Run
 
@@ -43,7 +43,7 @@ dotnet run
 
 You can also run the project in Visual Studio. A build copies the resume, prompt files, and shared settings into the folder containing the executable. The program reads those copies. Edit the original files in the project folder and rebuild to try your changes. The first build downloads the packages if needed.
 
-[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file; Git ignores your `.env` file. ResumeSummarizer.cs calls the facade in [AiProvider.cs](../../shared/shared/AiProvider.cs), which handles the SDK, agent, and provider details. Changing the selected provider or model requires no lesson code changes. The lesson prints the selected model and provider. Each run makes **three model calls**, one per prompt: normally three real HTTP requests and at most **nine HTTP attempts** with retries. They send the fictional resume to the selected AI provider and may charge your account. Each call allows up to 2,048 output tokens, the small pieces of text counted by the model. The code requests temperature 0.2 for all three calls; models that support this setting use it to control variation in the generated text. Each call has a 120-second total deadline, including retry waits and attempts. The code leaves `top_p`, another generation setting, unset because some providers reject it.
+[SettingsReader.cs](../../shared/shared/SettingsReader.cs) reads the copied settings file; Git ignores your `.env` file. ResumeSummarizer.cs constructs the agent directly and uses [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) for provider connections and compatibility. Changing the selected provider or model requires no lesson code changes. The lesson prints the selected model and provider. Each run makes **three model calls**, one per prompt: normally three real HTTP requests and at most **nine HTTP attempts** with retries. They send the fictional resume to the selected AI provider and may charge your account. Each call allows up to 2,048 output tokens, the small pieces of text counted by the model. The code requests temperature 0.2 for all three calls; models that support this setting use it to control variation in the generated text. Each call has a 120-second total deadline, including retry waits and attempts. The code leaves `top_p`, another generation setting, unset because some providers reject it.
 
 Gemini 3.6 and newer models currently ignore custom temperature values. Google recommends omitting that parameter and says it will become an error in a future release. This experiment keeps its declared settings fixed, so choose a compatible model when temperature control matters. See [Gemini's parameter guidance](https://ai.google.dev/gemini-api/docs/troubleshooting#recitation-issue).
 
@@ -74,15 +74,12 @@ The word counter splits text at spaces, tabs, and line breaks. It helps you chec
 Program.cs                                    Prompt list and main execution flow
 InputValidator.cs                             Source-file checks before the comparison
 PromptComparer.cs                             Comparison loop, printed summaries, and word counts
-ResumeSummarizer.cs                           Prompts, generation settings, and independent facade call
+ResumeSummarizer.cs                           Native agent, prompts, settings, and independent RunAsync call
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
-../../shared/shared/AiProvider.cs             Shared model-call facade, deadlines, checks, and API errors
-../../shared/shared/AiRequest.cs              Request inputs and optional JSON schema
-../../shared/shared/AiResponse.cs             Checked text, token usage, and request timing
-../../shared/shared/AiRequestException.cs     API failures independent of SDK exception types
-../../shared/shared/AiRetryPolicy.cs          Shared HTTP retries and retry messages
+../../shared/shared/AiClientFactory.cs        Provider client construction and compatibility
+../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy
 ../../shared/shared/ProviderSettings.cs       Selected provider connection values
-../../shared/shared.tests/AiProviderTests.cs  Shared facade request and response checks
+../../shared/shared.tests/AiClientFactoryTests.cs  Native requests and provider compatibility
 ../../shared/shared/.env                      Provider selection, keys, and models
 ../../shared/shared/.env.example              Template for creating the shared settings
 Prompts/A-zero-shot.txt                       Direct instruction
@@ -103,7 +100,7 @@ The solution includes `prompt-engineering.tests`, a small [xUnit project](https:
 | [InputValidatorTests.cs](../prompt-engineering.tests/InputValidatorTests.cs) | Two local cases reject missing and empty prompts before any request. |
 | [ResumeSummarizerTests.cs](../prompt-engineering.tests/ResumeSummarizerTests.cs) | Three integration cases check a nonempty paragraph and the constrained prompt's word limit. |
 
-Before each integration request, the tests call `InputValidator.ValidateInputsAsync` for all three prompt files, matching the application's preparation step. A missing or empty later prompt therefore stops the test before its first paid request. The tests then call `ResumeSummarizer.SummarizeAsync` and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common settings and response checks are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+Before each integration request, the tests call `InputValidator.ValidateInputsAsync` for all three prompt files, matching the application's preparation step. A missing or empty later prompt therefore stops the test before its first paid request. The tests then call `ResumeSummarizer.SummarizeAsync` and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 

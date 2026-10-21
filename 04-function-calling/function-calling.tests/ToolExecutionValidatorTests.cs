@@ -1,26 +1,59 @@
-﻿using Xunit;
-
-using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Xunit;
 
 public class ToolExecutionValidatorTests
 {
-    // Even a correct-looking answer needs the execution record supplied by the real function loop.
+    // A requested function is insufficient without its actual successful result.
     [Fact]
     public void An_answer_without_a_real_tool_execution_is_rejected()
     {
-        AiResponse response = new("36 full calendar months [CalculateExperience.totalMonths].", null, 0);
-        Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
+        AgentResponse response = new(
+        [
+            new ChatMessage(ChatRole.Assistant,
+                [new FunctionCallContent("calculation-0", "CalculateExperience", new Dictionary<string, object?>())]),
+            new ChatMessage(ChatRole.Assistant, "36 full calendar months [CalculateExperience.totalMonths].")
+        ]);
+        InvalidDataException error = Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
+        Assert.Contains("did not execute", error.Message);
     }
 
-    // A different or repeated function is not evidence for this lesson's single calculation.
-    [Fact]
-    public void Wrong_or_multiple_tool_records_are_rejected()
+    // Match each result to the calculator's name and require a successful execution.
+    [Theory]
+    [InlineData("OtherTool", false)]
+    [InlineData("CalculateExperience", true)]
+    public void Wrong_or_failed_function_results_are_rejected(string name, bool failed)
     {
-        AiToolExecution execution = new("OtherTool", JsonSerializer.SerializeToElement(new { totalMonths = 36 }), 0);
-        AiResponse response = new("answer", null, 0) { ToolExecutions = [execution] };
-        Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
-        response = response with { ToolExecutions = [execution with { ToolName = "CalculateExperience" }, execution] };
-        Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
+        FunctionResultContent result = new("calculation-0", new { totalMonths = 36 });
+        if (failed) result.Exception = new InvalidDataException("The source dates are invalid.");
+        AgentResponse response = new(
+        [
+            new ChatMessage(ChatRole.Assistant,
+                [new FunctionCallContent("calculation-0", name, new Dictionary<string, object?>())]),
+            new ChatMessage(ChatRole.Tool, [result])
+        ]);
+        InvalidDataException error = Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
+        Assert.Contains("successful CalculateExperience", error.Message);
+    }
+
+    // A second successful execution violates the lesson's exact single-execution rule.
+    [Fact]
+    public void Multiple_calculator_results_are_rejected()
+    {
+        AgentResponse response = new(
+        [
+            new ChatMessage(ChatRole.Assistant,
+            [
+                new FunctionCallContent("first", "CalculateExperience", new Dictionary<string, object?>()),
+                new FunctionCallContent("second", "CalculateExperience", new Dictionary<string, object?>())
+            ]),
+            new ChatMessage(ChatRole.Tool,
+            [
+                new FunctionResultContent("first", new { totalMonths = 36 }),
+                new FunctionResultContent("second", new { totalMonths = 36 })
+            ])
+        ]);
+        InvalidDataException error = Assert.Throws<InvalidDataException>(() => ToolExecutionValidator.ValidateToolExecution(response));
+        Assert.Contains("exactly one CalculateExperience", error.Message);
     }
 }
-

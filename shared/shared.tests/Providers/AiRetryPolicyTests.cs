@@ -169,7 +169,7 @@ public class AiRetryPolicyTests
             Endpoint = new Uri("https://example.invalid/v1"),
             Transport = new HttpClientPipelineTransport(httpClient),
             RetryPolicy = policy,
-            NetworkTimeout = TimeSpan.FromSeconds(AiProvider.RequestTimeoutSeconds)
+            NetworkTimeout = TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds)
         });
 
     // Record each requested delay without waiting, and let tests cancel at that point.

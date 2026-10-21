@@ -36,11 +36,6 @@ try
 
     return comparisonReport.Results.All(result => result.EvidenceFlags.Count == 0) ? 0 : 1;
 }
-catch (AiRequestException error)
-{
-    AiProvider.WriteError(error);
-    return 1;
-}
 catch (OperationCanceledException)
 {
     Console.Error.WriteLine("The request was canceled or exceeded the 120-second time limit.");

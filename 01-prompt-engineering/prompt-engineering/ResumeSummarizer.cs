@@ -1,3 +1,6 @@
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
 public static class ResumeSummarizer
 {
     private const float Temperature = 0.2f;
@@ -18,17 +21,36 @@ public static class ResumeSummarizer
         Console.WriteLine($"Model: {settings.Model}");
         Console.WriteLine($"Provider: {settings.Name}");
 
-        AiRequest request = new(
-            Name: "ResumeSummarizer",
-            Instructions: SystemPrompt,
-            Input: $"{instruction}\n\nRESUME DATA:\n{resume}",
-            Temperature: Temperature,
-            MaxOutputTokens: MaxOutputTokens);
+        var factory = new AiClientFactory();
+        using IChatClient client = factory.CreateClient(settings);
+        ChatClientAgent agent = new(client, new ChatClientAgentOptions
+        {
+            Name = "ResumeSummarizer",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = SystemPrompt,
+                Temperature = Temperature,
+                MaxOutputTokens = MaxOutputTokens
+            }
+        });
 
-        AiResponse response = await AiProvider
-            .RequestAsync(settings, request, cancellationToken);
+        // A new run has no earlier answers; one deadline also covers HTTP retries.
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
 
-        return response.Text;
+        AgentResponse response = await agent.RunAsync(
+            $"{instruction}\n\nRESUME DATA:\n{resume}", cancellationToken: deadline.Token);
+
+        // A completed HTTP request can still contain an empty or cut-short answer.
+        if (response.FinishReason == ChatFinishReason.Length)
+            throw new InvalidDataException("The provider truncated its response at the output token limit.");
+        string? answer = response.Messages.LastOrDefault(message => message.Role == ChatRole.Assistant)?.Text;
+        if (string.IsNullOrWhiteSpace(answer))
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
+
+        return answer;
     }
     // Read the copied inputs so console runs and tests use the same source files.
     private static async Task<(string Resume, string Instruction)> ReadInputsAsync(

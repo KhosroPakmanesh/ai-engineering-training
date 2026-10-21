@@ -5,7 +5,7 @@ Keep all repository rules in this file. The project creation skill is a short wo
 ## Keep the learning goal visible
 
 - The learning projects are small C#/.NET 10 console applications; shared is their common class library. Start by reading the project's README and source files.
-- Keep the AiProvider.RequestAsync call, prompts, and generation settings visible in the experiment's own source file. Keep SDK clients, agents, provider-specific options, and SDK response types behind the shared facade.
+- Keep agent construction, ChatOptions, prompts, tools, and the RunAsync call visible in the experiment's own source file. Use Microsoft Agent Framework and Microsoft.Extensions.AI types directly. Keep AiClientFactory as the only shared AI entry point, returning IChatClient. Its constructor manually registers lightweight internal provider strategies; only the selected strategy creates an SDK client. Keep each provider's name, configuration keys, endpoint, and provider-specific behavior in its own class. Share identical transport and wire-format behavior internally. Do not add custom request, response, schema, tool, deadline, or response-check facades around the framework.
 - During plumbing changes, preserve existing prompts, sample data, model settings, request counts, return types, successful console output, and exported JSON formats unless the user requests a change.
 - When adding a project, keep changes scoped to that project and the shared code, solution entries, and documentation it needs.
 - Run projects directly with dotnet run. Keep application execution free of command-line arguments and offline or simulated API modes.
@@ -34,7 +34,7 @@ Use the manually refactored learning applications as examples of the preferred c
 - Default to List<T> for new collection properties, intermediate results, and collection inputs or outputs in the learning code. Do not convert a list to an array merely because construction is finished. Reuse an existing collection when it already represents the required result; avoid ToList() or collection spreading that merely copies an already suitable collection unless an independent copy is needed. Use IEnumerable<T> for enumeration-only inputs and other collection types when their semantics or a required API justify them. Preserve existing return types during unrelated changes.
 - Use named constructor arguments when a record or result has many fields, especially measurements and comparison reports. Keep short, obvious constructions positional when field meanings are easy to follow.
 - Represent visibly different experiment strategies with clearly named methods or classes so the caller states which behavior it selects. Keep the number of strategy classes proportional to the lesson; do not introduce an interface or hierarchy solely to separate two simple operations.
-- Keep routine configuration and error handling in shared/ so the explicit orchestration focuses on the learning area.
+- Keep provider configuration and connection behavior in shared/. Use native cancellation and response checks in each lesson, and print native exception messages in the application entry point.
 - Order methods from overview to detail: put the entry point or main orchestration method first, arrange its helpers in call order, and place a helper used by only one method immediately below its caller. Put helpers shared by several methods after the main stages and keep related overloads together.
 - Keep constants, fields, and configuration at the top. When reordering existing methods, move each complete declaration with its comments without changing its signature, body, or calls; preserve field initializer order.
 - Add a layer, interface, generic helper, or dependency only when it has a clear purpose in the lesson. Keep the number of files and methods proportional to the concepts being taught.
@@ -48,7 +48,7 @@ Use the repository-local [create-learning-project skill](.agents/skills/create-l
 
 - Use the user's explicit project requirements to define the behavior. Identify the concept the learner should observe, the input they can change, and the output they should inspect.
 - Use existing conventions for unspecified routine details. Clarify missing information when it changes the learning objective or required behavior.
-- Before implementing, read the README and source of the existing project closest to the learning concept. Inspect [the solution](AIEngineeringTraining.slnx) and [shared tests](shared/shared.tests/AiProviderTests.cs) alongside the shared plumbing described below.
+- Before implementing, read the README and source of the existing project closest to the learning concept. Inspect [the solution](AIEngineeringTraining.slnx) and [shared tests](shared/shared.tests/AiClientFactoryTests.cs) alongside the shared plumbing described below.
 
 Example request: `$create-learning-project Implement a small project demonstrating tool calling with a fictional resume.`
 
@@ -56,10 +56,10 @@ Example request: `$create-learning-project Implement a small project demonstrati
 
 - shared/ is at the repository root, beside the numbered project folders.
 - Follow the same layout as the learning projects: shared/shared/ contains the class library and shared/shared.tests/ contains its xUnit tests.
-- Read shared/shared/SettingsReader.cs before adding settings parsing, and shared/shared/AiProvider.cs before adding model calls, provider options, response guards, timeout values, or provider error messages.
-- Extend an existing shared helper when multiple projects need the same behavior. Do not copy shared code into individual project folders.
+- Read shared/shared/SettingsReader.cs and shared/shared/AiClientFactory.cs before changing configuration or provider selection. Read the corresponding strategy and common transport code in shared/shared/Providers/ before changing provider options, metadata handling, or HTTP retries. Read the lesson's own request method before changing its native deadline or response checks.
+- Reuse internal provider utilities when several providers need the same connection or wire-format behavior. Small native cancellation and response checks may be explicit in each lesson; do not hide them behind another framework facade.
 - Keep lesson-specific prompts, data types, selection rules, schemas, and validation in their own project.
-- shared/shared.tests/ mirrors the shared source files: AiProviderTests.cs checks facade requests, provider options, independent calls, responses, API errors, and cancellation; SettingsReaderTests.cs checks configuration parsing; ProviderSettingsTests.cs checks safe descriptions; and AiRetryPolicyTests.cs checks retries through the SDK pipeline. Run these in shared.tests and extend the corresponding file when changing shared behavior.
+- shared/shared.tests/ mirrors the shared source files: AiClientFactoryTests.cs checks strategy selection, native requests, schemas, tool metadata, independent calls, errors, and cancellation; SettingsReaderTests.cs checks selected-provider configuration; ProviderSettingsTests.cs checks safe descriptions; and Providers/AiRetryPolicyTests.cs checks the internal retry policy through the SDK pipeline. Keep lesson response checks, native cancellation, tool budgets, and evidence checks in the lesson's counterpart tests.
 
 ## Use one credentials file
 
@@ -93,8 +93,8 @@ Use existing pinned package versions when suitable. Check official documentation
 </ItemGroup>
 ```
 
-6. Use SettingsReader.ReadSettingsAsync for configuration and AiProvider.RequestAsync for every model call. Declare the name, instructions, input, temperature, output limit, and optional AiJsonSchema in an AiRequest in the lesson. Consume the shared AiResponse and catch AiRequestException with AiProvider.WriteError. Keep AI SDK package references, client lifetimes, agent construction, response conversion, and provider-specific routing inside shared/ so changing the model, provider, or SDK does not require changes in lesson code. Apply provider-specific options only to the relevant provider; never silently change a lesson's settings or route a failed request to another provider.
-7. Validate inputs before making API requests and declare the output limit in the experiment source. The facade uses the shared AiRetryPolicy for at most two HTTP retries on 408, 429, 500, 502, 503, or 504, with AiProvider.RequestTimeoutSeconds setting one 120-second deadline around all attempts and waits. Do not add another deadline or retry loop in a lesson. Use AiProvider.MaxRetries when displaying the retry limit, and document model calls separately from maximum HTTP attempts.
+6. Use SettingsReader.ReadSettingsAsync for configuration, construct AiClientFactory, and call its instance CreateClient method for a disposable IChatClient. Construct ChatClientAgent and ChatOptions in the lesson, declaring the name, instructions, temperature, output limit, optional ChatResponseFormat.ForJsonSchema, and tools created with AIFunctionFactory.Create. Call RunAsync directly and consume AgentResponse and UsageDetails. Reject ChatFinishReason.Length and empty final assistant text before accepting a response. For tool conversations, exclude earlier assistant preambles from the final answer. Handle native exceptions without an SDK-specific catch in lesson code. Keep provider SDK setup and compatibility inside internal strategies so changing the configured provider or model leaves lesson code unchanged. Framework API changes may require lesson changes. Preserve pinned dependency versions; never silently change lesson settings or route a failed request to another provider.
+7. Validate inputs before making API requests and declare the output limit in the experiment source. Internal Providers/AiRetryPolicy allows at most two HTTP retries on 408, 429, 500, 502, 503, or 504. Create one native linked CancellationTokenSource around each complete RunAsync and call CancelAfter with AiClientFactory.RequestTimeoutSeconds, the common 120-second limit. Pass that token through every model turn, tool, and retry wait. Do not restart the deadline per turn or add a lesson retry loop. Use AiClientFactory.MaxRetries when displaying the retry limit, and document model calls separately from maximum HTTP attempts. Keep exact lesson-specific model and tool budgets explicit; a framework iteration limit alone may not enforce them.
 8. When tests are requested, follow the testing guidance below.
 9. Follow the README format below.
 10. Follow the verification guidance under Check changes.
@@ -150,7 +150,7 @@ When creating or modifying a README, write like a teacher explaining the experim
 - For comparisons, explain what changes and what stays fixed. Connect the result to the lesson, and make clear which checks the code performs and which judgments the learner still makes.
 - When improving an existing README's language, preserve its headings, section order, concept table, exercises, commands, file list, and References line. Keep request counts, settings, paths, test descriptions, and implementation facts accurate.
 
-Keep commands simple and describe the actual implementation and output. Link to shared/shared/AiProvider.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
+Keep commands simple and describe the actual implementation and output. Link to shared/shared/AiClientFactory.cs and shared/shared/.env.example. Do not describe projects using numbered "Lab" labels.
 
 ## Check changes
 

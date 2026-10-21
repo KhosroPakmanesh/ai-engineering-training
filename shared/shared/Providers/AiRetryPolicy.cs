@@ -1,7 +1,7 @@
 using System.ClientModel.Primitives;
 
 // Retry only the failed HTTP request, without starting the whole agent call again.
-public class AiRetryPolicy() : ClientRetryPolicy(MaxRetries)
+internal class AiRetryPolicy() : ClientRetryPolicy(MaxRetries)
 {
     public const int MaxRetries = 2;
 
