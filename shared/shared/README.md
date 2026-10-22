@@ -1,6 +1,6 @@
 # Shared Plumbing: one small library
 
-This library hides the connection differences between OpenRouter and Gemini while the learning applications use Microsoft Agent Framework directly. **AiClientFactory.cs** manually registers lightweight provider strategies in its constructor and selects one to create an IChatClient, the framework's common model-client interface. **Providers/OpenRouterProvider.cs** and **Providers/GeminiProvider.cs** own their names, configuration keys, endpoints, and provider-specific options. **SettingsReader.cs** uses those same registrations to read the selected connection into **ProviderSettings**. Chat lessons create their agents, declare prompts and tools, call RunAsync with native cancellation, and check native responses themselves. Embedding lessons use factory.CreateEmbeddingGenerator to obtain `Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>>`. Requests, model and vector validation, normalization, and ranking remain visible in the lesson.
+This library hides the connection differences between OpenRouter and Gemini while the learning applications use Microsoft Agent Framework directly. **AiClientFactory.cs** manually registers lightweight provider strategies in its constructor and selects one to create an IChatClient, the framework's common model-client interface. **Providers/OpenRouterProvider.cs** and **Providers/GeminiProvider.cs** own their names, configuration keys, endpoints, and provider-specific options. **SettingsReader.cs** uses those same registrations to read the selected connection into **ProviderSettings**. Chat lessons create their agents, declare prompts and tools, call RunAsync with native cancellation, and check native responses themselves. Embedding lessons use factory.CreateEmbeddingGenerator to obtain `Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>>`. Requests, model and vector validation, normalization, and ranking remain visible in the lesson. **ConsoleOutput.cs** supplies simple headings and coloured lines; each application's **OutputPrinter.cs** owns its teaching text and result formatting.
 
 | Method or value | Purpose |
 | --- | --- |
@@ -11,6 +11,7 @@ This library hides the connection differences between OpenRouter and Gemini whil
 | ProviderSettings | Hold the selected provider's connection values without printing credentials. |
 | AiClientFactory.RequestTimeoutSeconds | Supply the common 120-second value for the SDK and each lesson's native deadline. |
 | AiClientFactory.MaxRetries | Expose the two-retry limit without exposing the internal HTTP policy. |
+| ConsoleOutput.PrintHeading and PrintColoredLine | Print consistent headings and optional colours without owning lesson behavior. |
 
 The factory is the only shared AI entry point. Its constructor creates no SDK clients and needs no credentials. Only the selected strategy creates a client. Adding another provider means implementing an internal strategy and registering it in that constructor; existing lesson requests continue to use IChatClient. Both current strategies reuse the same internal OpenAI-compatible transport without combining their configuration details in the factory.
 
@@ -46,7 +47,7 @@ flowchart TD
     U --> H
     U -->|Failure| X
     T -->|No| V["Learning application<br/>Check finish reason, final text, and lesson evidence"]
-    V --> P["Print accepted results"]
+    V --> P["Lesson OutputPrinter.cs + shared ConsoleOutput.cs<br/>Present results after local checks"]
     C -->|No| X
     V -->|Failure| X
 ```
@@ -89,6 +90,8 @@ Each chat request method rejects empty final assistant text and ChatFinishReason
 
 A retry prints a message such as HTTP 503. Retry 1/2 in 2.3 seconds. A successful first attempt prints no retry message. After two retries fail, the final SDK exception reaches the application. A long Retry-After wait can exhaust the complete run's deadline before another attempt.
 
+ConsoleOutput.PrintHeading prints a green title and divider. PrintColoredLine applies the requested colour only for an interactive terminal and restores the original colour in `finally`. Both return no value. Redirected output stays plain text, so lesson printers keep text labels that explain every result without colour. This static helper reads no settings, makes no requests, and performs no lesson checks. Application entry points still print native exception messages to Console.Error.
+
 ## Learn by changing a check
 
 1. Read ParseSettings in SettingsReader.cs. Predict what it does with a comment line, a quoted model name, and an equals sign inside a value.
@@ -101,6 +104,7 @@ A retry prints a message such as HTTP 503. Retry 1/2 in 2.3 seconds. A successfu
 AiClientFactory.cs                               Manual strategy registration and selected-client creation
 SettingsReader.cs                                Selected-provider configuration parsing and checks
 ProviderSettings.cs                              Connection record with a credential-safe ToString
+ConsoleOutput.cs                                 Shared heading style and terminal colour handling
 Providers/IAiProviderStrategy.cs                  Internal strategy contract for Microsoft chat and embedding interfaces
 Providers/OpenRouterProvider.cs                  OpenRouter configuration, endpoint, and routing extension
 Providers/GeminiProvider.cs                      Gemini configuration, endpoint, and omitted-zero index handling

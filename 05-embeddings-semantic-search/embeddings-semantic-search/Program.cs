@@ -107,7 +107,7 @@ try
     OutputPrinter.PrintComparisonGuide(query);
 
     // 2. Show both rankings, starting at rank 1, with excerpts for the learner to judge.
-    Console.WriteLine("\nRESULTS: each method starts at rank 1; excerpts show up to 90 characters.");
+    OutputPrinter.PrintResultsHeading();
     for (int index = 0; index < semanticResults.Count; index++)
     {
         SearchResult semantic = semanticResults[index];

@@ -58,8 +58,7 @@ public static class CvExtractor
             }
         });
 
-        Console.WriteLine($"Model: {settings.Model}. Sending the fictional CV to {settings.Name}" +
-            $" (one model call, up to {AiClientFactory.MaxRetries} retries).");
+        OutputPrinter.PrintRequestDetails(settings);
 
         cancellationToken.ThrowIfCancellationRequested();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

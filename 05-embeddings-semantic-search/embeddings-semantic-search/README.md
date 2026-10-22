@@ -1,6 +1,6 @@
 # Embeddings and Semantic Search: one small experiment
 
-An embedding is a list of numbers that represents text. Texts with related meanings can have vectors pointing in similar directions. This experiment searches 12 fictional software project descriptions twice: once by meaning and once by matching words. **Program.cs** shows the complete flow. **ProjectEmbedder.cs** makes requests through Microsoft's common embedding interface, **EmbeddingResponseValidator.cs** checks the returned values, and **SemanticSearch.cs** and **LexicalSearch.cs** rank the same source texts.
+An embedding is a list of numbers that represents text. Texts with related meanings can have vectors pointing in similar directions. This experiment searches 12 fictional software project descriptions twice: once by meaning and once by matching words. **Program.cs** shows the complete flow. **ProjectEmbedder.cs** makes requests through Microsoft's common embedding interface, **EmbeddingResponseValidator.cs** checks the returned values, and **SemanticSearch.cs** and **LexicalSearch.cs** rank the same source texts. **OutputPrinter.cs** explains the comparison and presents the rankings, index details, and learning takeaway.
 
 | Search | Concept |
 | --- | --- |
@@ -20,7 +20,8 @@ flowchart TD
     A["Program.cs + ProjectDescriptionsLoader.cs<br/>Read the query, top-k, and projects"] --> B["SearchInputsValidator.cs<br/>Check all inputs before remote work"]
     B --> C["Program.cs + LexicalSearch.cs<br/>Prepare both batches and rank keyword matches"]
     C --> D["SettingsReader.cs + AiClientFactory.cs<br/>Read settings and create IEmbeddingGenerator"]
-    D --> E["ProjectEmbedder.cs<br/>Call generator.GenerateAsync for documents: call 1"]
+    D --> O["OutputPrinter.cs<br/>Introduce the query and two-call plan"]
+    O --> E["ProjectEmbedder.cs<br/>Call generator.GenerateAsync for documents: call 1"]
     E --> F{"EmbeddingResponseValidator.cs<br/>Model, count, and vectors valid?"}
     F -->|Yes| G["VectorNormalizer.cs<br/>Normalize document vectors"]
     G --> H["SearchIndexValidator.cs + SqliteSearchIndex.cs<br/>Check and replace the complete SQLite index"]
@@ -30,7 +31,7 @@ flowchart TD
     K -->|Yes| QC{"SearchIndexValidator.cs<br/>Query compatible with the index?"}
     QC -->|Yes| L["VectorNormalizer.cs<br/>Normalize the query vector"]
     L --> M["SemanticSearch.cs<br/>Score every document and select top-k"]
-    M --> N["Program.cs<br/>Print both rankings and the database path"]
+    M --> N["OutputPrinter.cs<br/>Explain and print both rankings, database path, and takeaway"]
     F -->|No| X["Program.cs<br/>Print the error and exit 1"]
     K -->|No| X
     QC -->|No| X
@@ -84,7 +85,7 @@ The console prints the selected model and provider, query, indexed document coun
 
 Each `Rank 1`, `Rank 2`, and later block shows the keyword result first, followed by the semantic result at that position. The two entries can refer to different project IDs.
 
-In an interactive terminal, green marks headings, white marks rank dividers, cyan marks keyword search, and dark yellow marks semantic search. Provider, index, and usage details appear in grey. Excerpts use the terminal's default colour. Redirected output stays plain text, and the labels still identify each method.
+In an interactive terminal, green marks headings, white marks rank dividers, cyan marks keyword search, and dark yellow marks semantic search. Provider, index, and usage details appear in grey. Excerpts use the terminal's default colour. OutputPrinter.cs keeps the lesson text and result formatting together, while the shared ConsoleOutput.cs helper prints headings and restores the original colour after each coloured message. Redirected output stays plain text, and the labels still identify each method.
 
 Before the results, `Why use embeddings?` explains how `containerized APIs` can relate to `web services packaged as Docker images` despite different wording. This ability helps retrieve documents for retrieval-augmented generation (RAG), where an AI receives relevant source text before answering a question. This experiment demonstrates the retrieval step; it does not generate an answer from the results.
 
@@ -108,7 +109,8 @@ The database has IndexMetadata and Projects tables. Vectors are JSON lists in SQ
 ## Files to read
 
 ```text
-Program.cs                                      Complete flow, query, top-k, and console teaching text
+Program.cs                                      Complete flow, query, top-k, and presentation calls
+OutputPrinter.cs                                Search explanations, rank comparisons, details, and takeaway
 ProjectDescriptionsLoader.cs                    JSON input loading
 SearchInputsValidator.cs                        Complete input checks before remote work
 ProjectEmbedder.cs                              Microsoft GenerateAsync request and per-call deadline
@@ -127,6 +129,7 @@ SampleData/projects.json                        Twelve fictional project descrip
 embeddings-semantic-search.csproj                .NET 10 application and SQLite dependency
 ../../shared/shared/SettingsReader.cs           Selected-provider embedding settings
 ../../shared/shared/AiClientFactory.cs          Common chat client and embedding generator construction
+../../shared/shared/ConsoleOutput.cs            Shared headings and terminal colour handling
 ../../shared/shared/Providers/EmbeddingResponseOrderPolicy.cs  Raw index checks and input ordering
 ../../shared/shared/Providers/GeminiProvider.cs  Gemini omitted-zero index compatibility
 ../../shared/shared/Providers/AiRetryPolicy.cs   Internal bounded HTTP retries

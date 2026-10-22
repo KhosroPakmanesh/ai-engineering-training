@@ -15,24 +15,15 @@ try
     List<PreparedContext> preparedContexts =
         ContextCreator.CreateContextStrategies(comparisonInputs);
 
+    OutputPrinter.PrintIntroduction(question, sourceFile);
+
     // Change only the supplied context while keeping the question and settings fixed.
     ComparisonReport comparisonReport = await ContextComparer.
         CompareContextAsync(sourceFile,comparisonInputs, preparedContexts);
 
     // Show each answer with its prompt size, request time, and any failed evidence checks.
-    Console.WriteLine($"Question: {comparisonReport.Question}");
-    foreach (ContextResult result in comparisonReport.Results)
-    {
-        Console.WriteLine($"\n{result.Strategy}: {string.Join(", ", result.IncludedSectionIds)}");
-        Console.WriteLine($"Prompt: {result.PromptCharacters} characters, ~{result.EstimatedPromptTokens} tokens (estimate)");
-        Console.WriteLine($"Time: {result.LatencyMilliseconds} ms");
-        Console.WriteLine(result.ProviderUsage is { } usage
-            ? $"Provider tokens: input={usage.InputTokens?.ToString() ?? "unavailable"}, output={usage.OutputTokens?.ToString() ?? "unavailable"}"
-            : "Provider token usage: unavailable");
-        Console.WriteLine($"Source recall: {result.SourceRecall?.ToString("P0") ?? "not applicable"}");
-        Console.WriteLine($"Evidence checks: {(result.EvidenceFlags.Count == 0 ? "passed" : string.Join("; ", result.EvidenceFlags))}");
-        Console.WriteLine(result.Response);
-    }
+    OutputPrinter.PrintResults(comparisonReport);
+    OutputPrinter.PrintTakeaway();
 
     return comparisonReport.Results.All(result => result.EvidenceFlags.Count == 0) ? 0 : 1;
 }

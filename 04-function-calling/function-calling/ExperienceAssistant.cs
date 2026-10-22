@@ -83,8 +83,7 @@ public static class ExperienceAssistant
             UseProvidedChatClientAsIs = true
         });
 
-        Console.WriteLine($"Model: {settings.Model}. Sending fictional work dates to {settings.Name} " +
-            $"(up to {MaxModelCalls} model calls, up to {AiClientFactory.MaxRetries} HTTP retries per call).");
+        OutputPrinter.PrintRequestDetails(settings);
 
         // All turns, the local calculator, and retry waits share the same deadline.
         cancellationToken.ThrowIfCancellationRequested();
@@ -122,7 +121,7 @@ public static class ExperienceAssistant
         finally
         {
             // Keep private arguments and exception contents out of the execution log.
-            Console.WriteLine($"tool_name={ToolName} inputs=[redacted] duration_ms={timer.ElapsedMilliseconds} succeeded={succeeded}");
+            OutputPrinter.PrintToolExecution(ToolName, timer.ElapsedMilliseconds, succeeded);
         }
     }
 

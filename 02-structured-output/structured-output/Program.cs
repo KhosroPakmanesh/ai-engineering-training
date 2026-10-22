@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 const string resumeFileName = "resume.md";
 const string resumeFile = $"SampleData/{resumeFileName}";
 
@@ -9,6 +7,8 @@ try
 
     // Read the resume beside the executable so the launch folder does not matter.
     string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folder, resumeFile));
+
+    OutputPrinter.PrintIntroduction(resumeFileName);
 
     // The model proposes a JSON profile; local checks decide whether to accept it.
     string jsonResume = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
@@ -24,9 +24,9 @@ try
     // Trim skill names and remove duplicates only after their evidence has passed the checks.
     profile = ProfileNormalizer.NormalizeProfile(profile);
 
-    JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    string formattedJson = JsonSerializer.Serialize(profile, jsonOptions);
-    Console.WriteLine(formattedJson);
+    // Present only the profile that completed every required stage.
+    OutputPrinter.PrintProfile(profile);
+    OutputPrinter.PrintTakeaway();
 
     return 0;
 }

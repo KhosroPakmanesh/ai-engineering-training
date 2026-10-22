@@ -1,6 +1,6 @@
 # Function Calling: one small experiment
 
-Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages. **ExperienceInputsLoader.cs** reads the jobs, **ExperienceInputsValidator.cs** checks the question and dates, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, and **ExperienceCalculator.cs** performs the arithmetic. **ToolExecutionValidator.cs** checks that the function really ran, **ExperienceResponseParser.cs** reads the answer, calculation result, and call counts, and **ExperienceResultValidator.cs** checks the final total and citation.
+Function calling lets an AI ask your application to run a C# method and then use its result. Here, the model answers a question about three fictional backend jobs by selecting `CalculateExperience`. C# merges overlapping work dates and counts full calendar months. **Program.cs** shows the main stages. **ExperienceInputsLoader.cs** reads the jobs, **ExperienceInputsValidator.cs** checks the question and dates, **ExperienceAssistant.cs** declares the instruction, tool, and request settings, and **ExperienceCalculator.cs** performs the arithmetic. **ToolExecutionValidator.cs** checks that the function really ran, **ExperienceResponseParser.cs** reads the answer, calculation result, and call counts, and **ExperienceResultValidator.cs** checks the final total and citation. **OutputPrinter.cs** explains the tool sequence, prints the redacted execution log, and presents the accepted answer and measurements.
 
 | Path | Concept |
 | --- | --- |
@@ -16,7 +16,8 @@ Follow the arrows from top to bottom. Program.cs loads the source inputs and exp
 ```mermaid
 flowchart TD
     A["Program.cs + ExperienceInputsLoader.cs<br/>Read fictional jobs, question, and evaluation date"] --> B{"ExperienceInputsValidator.cs<br/>Are the question and dates usable?"}
-    B -->|Yes| C["ExperienceAssistant.cs<br/>Create AIFunction and ChatClientAgent with ChatOptions"]
+    B -->|Yes| O["OutputPrinter.cs<br/>Introduce the question, dates, and tool sequence"]
+    O --> C["ExperienceAssistant.cs<br/>Create AIFunction and ChatClientAgent with ChatOptions"]
     C --> D["ExperienceAssistant.cs<br/>Call agent.RunAsync; first model call with the available tool"]
     D --> E{"Did the model select CalculateExperience?"}
     E -->|Yes| F{"ExperienceAssistant.cs<br/>Do arguments match the supplied jobs and date?"}
@@ -27,7 +28,8 @@ flowchart TD
     R -->|No| X
     I -->|Yes| P["ExperienceResponseParser.cs<br/>Read the final answer, typed result, and call counts"]
     P --> J{"ExperienceResultValidator.cs<br/>Does the answer report and cite the returned total?"}
-    J -->|Yes| K["Program.cs<br/>Print counts, timing, and accepted answer; exit 0"]
+    J -->|Yes| K["OutputPrinter.cs<br/>Print counts, timing, accepted answer, and takeaway"]
+    K --> Y["Program.cs<br/>Exit 0"]
     B -->|No| X["Show the error and exit 1"]
     E -->|No| X
     F -->|No| X
@@ -43,7 +45,7 @@ Dates must be complete ISO dates such as `2024-02-01`. Each interval includes it
 
 The calculator sorts intervals and merges overlaps, duplicates, and touching intervals before counting. Jobs covering January 1-15 and January 15-February 1 together cover one full January. A null `endDate` means a current role and requires the evaluation date declared in Program.cs. The program never uses today's date or invents missing date parts. The evaluation date replaces only missing end dates; completed jobs retain their stated end dates.
 
-ExperienceAssistant.cs binds an ordinary C# callback to this run's original inputs. It rejects changed, omitted, added, or reordered intervals and a changed evaluation date. ExperienceAssistant.cs uses `AIFunctionFactory.Create` to generate the argument schema from that callback's parameter types. Agent Framework performs the actual invocation loop. Tool choice is automatic, so a model that answers without a tool is detected rather than treated as success.
+ExperienceAssistant.cs binds an ordinary C# callback to this run's original inputs. It rejects changed, omitted, added, or reordered intervals and a changed evaluation date. ExperienceAssistant.cs uses `AIFunctionFactory.Create` to generate the argument schema from that callback's parameter types. Agent Framework performs the actual invocation loop. Tool choice is automatic, so a model that answers without a tool is detected rather than treated as success. The callback measures its local work and calls OutputPrinter.cs from `finally` to retain the redacted log on both success and failure. The printer formats supplied values; it does not execute or validate the tool.
 
 ExperienceAssistant.cs uses the framework's FunctionInvokingChatClient for one tool round trip: a model call to select the function, followed by a model call to explain its result. It handles argument conversion, calls the registered function, and sends the result back to the model. Function errors stop before a follow-up model request. The instruction requests one calculation, and ToolExecutionValidator checks that exactly one successful result was returned; this check runs after the conversation. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
 
@@ -76,6 +78,8 @@ A missing or invalid reference date fails before an API request. Zero tool calls
 
 The fictional jobs cover January 2020-July 2021, January 2021-January 2022, and April 2022 through the explicit April 2023 evaluation date. Summing jobs separately gives 42 months. The first two overlap for six months, so their merged coverage is 24 months. The current role contributes 12 more, giving **36 full calendar months** across two merged intervals.
 
+OutputPrinter.cs introduces the two model turns before the request. Green headings separate the stages, and provider details and the redacted tool log appear in grey. The shared ConsoleOutput.cs helper restores the terminal's original colour. Redirected output stays plain text. After the accepted answer, the takeaway explains full-month counting and asks you to predict the effect of changing one source date.
+
 A successful run includes:
 
 ```text
@@ -103,6 +107,7 @@ The checks establish that the printed number matches an executed calculation ove
 
 ```text
 Program.cs                                      Question, evaluation date, and explicit acceptance flow
+OutputPrinter.cs                                Tool explanation, redacted log, accepted results, and takeaway
 ExperienceInputsLoader.cs                       Copied input loading and input records
 ExperienceInputsValidator.cs                    Question, date, reference-date, and chronology checks
 ExperienceCalculator.cs                         Sorting, overlap merging, and calendar-month counting
@@ -118,6 +123,7 @@ function-calling.csproj                         .NET 10 application, copied inpu
 ../function-calling.tests/                      Counterpart tests and fresh test fixtures
 ../../shared/shared/SettingsReader.cs           Shared settings loading
 ../../shared/shared/AiClientFactory.cs           Provider connections, routing, and tool metadata
+../../shared/shared/ConsoleOutput.cs             Shared headings and terminal colour handling
 ../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy
 ../../shared/shared/.env.example                Shared credentials template
 ```

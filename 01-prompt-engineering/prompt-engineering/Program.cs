@@ -10,8 +10,13 @@ try
     // Check every input file before making any paid model calls.
     await InputValidator.ValidateInputsAsync(prompts.Select(prompt => prompt.File));
 
+    // Explain what changes before the learner sees the three answers.
+    OutputPrinter.PrintIntroduction(prompts.Count);
+
     // Keep the resume fixed while comparing the three prompt instructions.
     await PromptComparer.ComparePromptsAsync(prompts);
+
+    OutputPrinter.PrintTakeaway();
 
     return 0;
 }

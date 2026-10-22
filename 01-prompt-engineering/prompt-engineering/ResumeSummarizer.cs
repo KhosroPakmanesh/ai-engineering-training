@@ -18,8 +18,7 @@ public static class ResumeSummarizer
 
         ProviderSettings settings = await SettingsReader
             .ReadSettingsAsync(AppContext.BaseDirectory, cancellationToken);
-        Console.WriteLine($"Model: {settings.Model}");
-        Console.WriteLine($"Provider: {settings.Name}");
+        OutputPrinter.PrintRequestDetails(settings);
 
         var factory = new AiClientFactory();
         using IChatClient client = factory.CreateClient(settings);

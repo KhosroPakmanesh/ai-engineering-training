@@ -5,11 +5,11 @@
     {
         foreach (var (name, promptFile) in prompts)
         {
-            Console.WriteLine($"\n{name}");
+            OutputPrinter.PrintPromptHeading(name);
             string summary = await ResumeSummarizer.SummarizeAsync(promptFile);
 
-            Console.WriteLine(summary);
-            Console.WriteLine($"Word count: {summary.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length}");
+            int wordCount = summary.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
+            OutputPrinter.PrintSummary(summary, wordCount);
         }
     }
 }

@@ -1,6 +1,6 @@
 # Prompt Engineering: one small experiment
 
-Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** lists the prompts and starts the comparison. **InputValidator.cs** checks the source files, **PromptComparer.cs** runs the loop and prints word counts, and **ResumeSummarizer.cs** creates a ChatClientAgent with the prompts and generation settings, calls RunAsync, and checks the final answer.
+Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** lists the prompts and starts the comparison. **InputValidator.cs** checks the source files, **PromptComparer.cs** runs the loop and counts words, and **ResumeSummarizer.cs** creates a ChatClientAgent with the prompts and generation settings, calls RunAsync, and checks the final answer. **OutputPrinter.cs** explains the comparison, prints the summaries and counts, and gives the learner a next step.
 
 | Prompt file | Concept |
 | --- | --- |
@@ -12,19 +12,20 @@ All three requests also receive the same system instruction in ResumeSummarizer.
 
 ## Execution flow
 
-Follow the arrows from top to bottom. InputValidator.cs checks every input file before the loop starts. PromptComparer.cs then runs once for A, once for B, and once for C. ResumeSummarizer.cs reads the shared settings through SettingsReader.cs before each model request.
+Follow the arrows from top to bottom. InputValidator.cs checks every input file before the loop starts. OutputPrinter.cs introduces what changes and what stays fixed. PromptComparer.cs then runs once for A, once for B, and once for C. ResumeSummarizer.cs reads the shared settings through SettingsReader.cs before each model request.
 
 ```mermaid
 flowchart TD
     A["Program.cs<br/>List prompts A, B and C"] --> B["InputValidator.cs<br/>Check the resume and all prompts"]
-    B --> C["PromptComparer.cs<br/>Choose the next prompt"]
+    B --> P["OutputPrinter.cs<br/>Introduce the comparison and call count"]
+    P --> C["PromptComparer.cs + OutputPrinter.cs<br/>Choose and label the next prompt"]
     C --> D["ResumeSummarizer.cs + SettingsReader.cs<br/>Read inputs and settings; create ChatClientAgent"]
     D --> E["ResumeSummarizer.cs<br/>Call agent.RunAsync: one independent model call"]
     E --> F["ResumeSummarizer.cs<br/>Check that the answer is nonempty and not cut short"]
-    F --> G["PromptComparer.cs<br/>Print the summary and its word count"]
+    F --> G["PromptComparer.cs + OutputPrinter.cs<br/>Count words and print the summary and count"]
     G --> H{"More prompts?"}
     H -->|Yes| C
-    H -->|No| I["Finish after three model calls"]
+    H -->|No| I["OutputPrinter.cs<br/>Explain the takeaway after three model calls"]
 ```
 
 Each pass uses the same resume, model, and settings with a fresh conversation. ResumeSummarizer.cs declares the system instruction, temperature, and output limit in ChatOptions. It asks [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) for an IChatClient, creates a ChatClientAgent, and calls RunAsync with the prompt plus resume. The framework sends the instruction as a system message and the prompt plus resume as a user message. Earlier summaries are not sent to the next request. ResumeSummarizer.cs checks the native finish reason and final assistant text, rejecting an empty or cut-short answer. A linked CancellationTokenSource covers the complete RunAsync call. A missing input, failed request, or rejected response stops the program before the later prompts run.
@@ -55,7 +56,9 @@ Some reasoning models spend output tokens on thinking as well as on the final an
 
 ## Understand the results
 
-PromptComparer.cs prints each summary under its prompt name, followed by its word count. Compare A, B, and C with the same resume. All three requests ask for one paragraph; C also asks for at most 70 words.
+OutputPrinter.cs introduces the three prompt styles and prints each summary under its prompt name, followed by the word count calculated in PromptComparer.cs. Compare A, B, and C with the same resume. All three requests ask for one paragraph; C also asks for at most 70 words. The final takeaway reminds you to check facts against the resume and try changing one prompt.
+
+Green headings separate the stages in an interactive terminal; model details and word counts appear in grey. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels and answers.
 
 A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy will send the same request again. No retry message appears when the first attempt succeeds. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results) for delays and failures after the attempt limit.
 
@@ -73,8 +76,10 @@ The word counter splits text at spaces, tabs, and line breaks. It helps you chec
 ```text
 Program.cs                                    Prompt list and main execution flow
 InputValidator.cs                             Source-file checks before the comparison
-PromptComparer.cs                             Comparison loop, printed summaries, and word counts
+PromptComparer.cs                             Comparison loop and word counts
+OutputPrinter.cs                              Introduction, labelled summaries, and learning takeaway
 ResumeSummarizer.cs                           Native agent, prompts, settings, and independent RunAsync call
+../../shared/shared/ConsoleOutput.cs          Shared headings and terminal colour handling
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
 ../../shared/shared/AiClientFactory.cs        Provider client construction and compatibility
 ../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy

@@ -10,6 +10,8 @@ try
     ExperienceInputs inputs = await ExperienceInputsLoader.LoadAsync(question, evaluationDate);
     ExperienceInputsValidator.ValidateInputs(inputs);
 
+    OutputPrinter.PrintIntroduction(inputs);
+
     // The model selects the tool, and the framework executes the C# function.
     var timer = Stopwatch.StartNew();
     AgentResponse response = await ExperienceAssistant.AskAsync(inputs);
@@ -26,10 +28,8 @@ try
     ExperienceResultValidator.ValidateAnswer(parsedResponse.Answer, result);
 
     // Show the calculation counts, request measurements, and accepted answer.
-    Console.WriteLine($"Input intervals: {result.InputIntervalCount}; merged intervals: {result.MergedIntervals.Count}");
-    Console.WriteLine($"Model calls: {parsedResponse.ModelCallCount}; tool executions: {parsedResponse.ToolExecutionCount}");
-    Console.WriteLine($"Request time: {timer.ElapsedMilliseconds} ms");
-    Console.WriteLine(parsedResponse.Answer);
+    OutputPrinter.PrintResults(parsedResponse, timer.ElapsedMilliseconds);
+    OutputPrinter.PrintTakeaway();
 
     return 0;
 }

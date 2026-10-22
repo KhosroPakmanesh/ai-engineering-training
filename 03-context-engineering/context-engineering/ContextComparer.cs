@@ -15,9 +15,7 @@ public static partial class ContextComparer
         string folder = AppContext.BaseDirectory;
         ProviderSettings settings = await SettingsReader.ReadSettingsAsync(folder, cancellationToken);
 
-        Console.WriteLine(
-            $"Model: {settings.Model}. Sending fictional project excerpts to " +
-            $"{settings.Name} (two model calls, up to {AiClientFactory.MaxRetries} retries per call).");
+        OutputPrinter.PrintRequestDetails(settings);
 
         var results = new List<ContextResult>();
         foreach (PreparedContext preparedContext in preparedContexts)

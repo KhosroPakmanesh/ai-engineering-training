@@ -1,6 +1,6 @@
 # Context Engineering: one small experiment
 
-Context engineering means choosing the information the AI receives before it answers a question. This experiment reads six fictional project descriptions and asks the same question twice. **Program.cs** runs the comparison. **FullContextStrategy.cs** supplies every description, while **SelectedContextStrategy.cs** chooses descriptions that match the question. **ContextCreator.cs** packages both contexts into prompts. **ContextComparer.cs** sends both requests through the same steps, and **ContextEvidenceChecker.cs** checks each answer's citations and quotes.
+Context engineering means choosing the information the AI receives before it answers a question. This experiment reads six fictional project descriptions and asks the same question twice. **Program.cs** runs the comparison. **FullContextStrategy.cs** supplies every description, while **SelectedContextStrategy.cs** chooses descriptions that match the question. **ContextCreator.cs** packages both contexts into prompts. **ContextComparer.cs** sends both requests through the same steps, and **ContextEvidenceChecker.cs** checks each answer's citations and quotes. **OutputPrinter.cs** introduces the two contexts and presents the answers, measurements, and learning takeaway.
 
 | Context | Concept |
 | --- | --- |
@@ -19,20 +19,21 @@ flowchart TD
     B --> C["FullContextStrategy.cs<br/>Prepare FULL with all descriptions"]
     C --> S["SelectedContextStrategy.cs<br/>Rank and choose descriptions for SELECTED"]
     S --> D["ContextCreator.cs<br/>Build and size-check both prompts"]
-    D --> E["SettingsReader.cs + ContextComparer.cs<br/>Read settings for both requests"]
+    D --> O["OutputPrinter.cs<br/>Introduce the question and context comparison"]
+    O --> E["SettingsReader.cs + ContextComparer.cs<br/>Read settings for both requests"]
     E --> F["ContextComparer.cs<br/>Call agent.RunAsync for FULL; check its evidence"]
     F --> G["ContextComparer.cs<br/>Call agent.RunAsync for SELECTED; check its evidence"]
-    G --> H["Program.cs<br/>Print both results and save comparison.json"]
+    G --> H["OutputPrinter.cs<br/>Print both results, evidence flags, and takeaway"]
     H --> I{"Any evidence flags?"}
     I -->|No| J["Exit 0"]
-    I -->|Yes| K["Exit 1<br/>The flagged report is saved"]
+    I -->|Yes| K["Exit 1<br/>The flagged results remain in console output"]
 ```
 
 FullContextStrategy.cs keeps all sections in their original document order. SelectedContextStrategy.cs uses the question to choose a smaller set. Both return a `ContextStrategy` record containing the strategy name, included sections, and their combined text. ContextCreator.cs joins the section text without rewriting it and rejects a context that exceeds the size limit. It then builds each prompt and pairs it with its context in a `PreparedContext` record. The preparation files make no model requests.
 
 Ranking helps SELECTED choose the descriptions most likely to contain the answer. When several match, it gives the strongest matches priority within the two-description limit. SelectedContextStrategy.cs keeps the keyword and ranking rules together. It ignores common question words such as `which` and `project`. Each remaining distinct word scores 3 points for a heading match, otherwise 1 point for a match in the description. The code adds each project's points and selects up to two with positive scores, highest first. For `Which project used PostgreSQL?`, P1 ranks highest because PostgreSQL appears in its heading. Equal scores follow the original document order. If no words match, SELECTED contains no descriptions. This is local word matching and makes no extra model requests.
 
-For each answer, ContextComparer.cs checks the native finish reason and rejects empty or cut-short final assistant text. ContextComparer.cs reads native UsageDetails and measures RunAsync with Stopwatch. ContextEvidenceChecker.cs checks citations and quotes. ContextComparer.cs keeps the answer with its measurements and any evidence flags in the existing ComparisonReport records. Flags allow the comparison to continue and are saved in the report. A missing input, oversized prompt, API error, or unusable response stops the flow before that final save.
+For each answer, ContextComparer.cs checks the native finish reason and rejects empty or cut-short final assistant text. ContextComparer.cs reads native UsageDetails and measures RunAsync with Stopwatch. ContextEvidenceChecker.cs checks citations and quotes. ContextComparer.cs keeps the answer with its measurements and any evidence flags in the existing ComparisonReport records. Flags allow the comparison to continue, and OutputPrinter.cs displays them beside the relevant answer. Program.cs still decides the exit code. A missing input, oversized prompt, API error, or unusable response stops the flow before the final comparison is printed.
 
 The [shared retry policy](../../shared/shared/Providers/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside each agent call. It keeps the same context and settings; it does not restart the comparison or repeat a completed context strategy.
 
@@ -56,7 +57,9 @@ Each context can contain at most 8,000 characters. The complete prompt, includin
 
 ## Understand the results
 
-The program prints the comparison and saves it as `comparison.json` beside the executable. It prints the file's full path so you can find it. The report records the selection rules, supplied and cited project IDs, prompt sizes, token estimates, provider token counts when available, request times, source recall, answers, and evidence flags. A flag is a message showing that an evidence check failed. Flagged results are saved for inspection, and the program exits with code 1. An API failure stops the comparison and leaves a previously saved report in place.
+OutputPrinter.cs prints both answers with the supplied project IDs, prompt sizes, token estimates, provider token counts when available, request times, source recall, and evidence flags. A flag is a message showing that an evidence check failed. Flagged results are printed for inspection, and the program exits with code 1. An API failure stops the comparison before the final results are printed. The application does not save a report file; integration tests serialize the ComparisonReport records into test output.
+
+Green headings separate the stages; cyan labels FULL and dark yellow labels SELECTED. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels, measurements, and flags. The final takeaway explains measurement limits and asks whether SELECTED kept the evidence needed for the answer.
 
 A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy will send the same request again. No retry message appears when the first attempt succeeds. Measured request time includes retries and waits; provider token counts describe the returned answer, not the failed attempts. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results) for delays and failures after the attempt limit.
 
@@ -75,6 +78,7 @@ A citation such as `[P1]` or `【P1】` points to a project description. Context
 
 ```text
 Program.cs                                    Main comparison flow and selected question
+OutputPrinter.cs                              Context explanations, result measurements, flags, and takeaway
 ComparisonInputsLoader.cs                     Source loading and expected project IDs
 ProjectSectionParser.cs                       Markdown headings, section text, and unique IDs
 ContextCreator.cs                             Context text, prompt packaging, and size limits
@@ -87,9 +91,10 @@ Types/ComparisonInputs.cs                     Question, source sections, and exp
 Types/ContextStrategy.cs                      Strategy name, included sections, and context text
 Types/PreparedContext.cs                      Context paired with its complete user prompt
 Types/ProjectSection.cs                       Parsed source ID, heading, and original text
-Types/ComparisonReport.cs                     Fixture and exported report records
+Types/ComparisonReport.cs                     Fixture, measurements, and comparison report records
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
 ../../shared/shared/AiClientFactory.cs        Provider client construction and compatibility
+../../shared/shared/ConsoleOutput.cs          Shared headings and terminal colour handling
 ../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy
 ../../shared/shared/ProviderSettings.cs       Selected provider connection values
 ../../shared/shared.tests/AiClientFactoryTests.cs  Native requests and provider compatibility
@@ -100,7 +105,7 @@ SampleData/questions.json                    Expected source IDs and an unsuppor
 context-engineering.csproj                    .NET 10 project, copied inputs, and shared reference
 ```
 
-Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RunContextAsync` creates an agent and calls RunAsync once, and `CreateResult` names each measurement beside its value. Use the console output and saved report to compare the answers, input sizes, and timings. AI dependencies are pinned in [shared.csproj](../../shared/shared/shared.csproj). Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
+Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RunContextAsync` creates an agent and calls RunAsync once, and `CreateResult` names each measurement beside its value. Use the console output to compare the answers, input sizes, and timings. AI dependencies are pinned in [shared.csproj](../../shared/shared/shared.csproj). Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
 
 ## Tests
 

@@ -1,6 +1,6 @@
 # Structured Output: one small experiment
 
-Structured output means asking the AI to return information in a fixed format that your code can read and check. Here, the AI turns a fictional resume into a JSON profile with named fields such as `name` and `skills`. **Program.cs** follows the steps from reading the resume to saving the result. **CvExtractor.cs** asks the model for the profile. **JsonResumeSchemaValidator.cs** checks its JSON shape, **ProfileExtractor.cs** converts it into records, **ProfileValidator.cs** checks the facts against the resume, and **ProfileNormalizer.cs** cleans up supported skill names.
+Structured output means asking the AI to return information in a fixed format that your code can read and check. Here, the AI turns a fictional resume into a JSON profile with named fields such as `name` and `skills`. **Program.cs** follows the steps from reading the resume to presenting the result. **CvExtractor.cs** asks the model for the profile. **JsonResumeSchemaValidator.cs** checks its JSON shape, **ProfileExtractor.cs** converts it into records, **ProfileValidator.cs** checks the facts against the resume, and **ProfileNormalizer.cs** cleans up supported skill names. **OutputPrinter.cs** explains the stages and prints the accepted profile.
 
 | File | Concept |
 | --- | --- |
@@ -12,22 +12,23 @@ Structured output means asking the AI to return information in a fixed format th
 | [ProfileValidator.cs](ProfileValidator.cs) | Check supporting quotes, text facts, dates, and stated durations. |
 | [ProfileNormalizer.cs](ProfileNormalizer.cs) | Trim supported skill names and remove duplicates. |
 
-The instruction in CvExtractor.cs tells the AI to use only stated facts and leave unknown values as `null`. For example, if the resume gives no phone number, the profile's phone field should be `null`. A missing collection, such as a skills list, becomes an empty array. Each request starts a fresh agent run. Program.cs sends the returned JSON through the local checks before printing or saving it. You can change the resume or instruction to see how they affect the profile while the required JSON format stays the same.
+The instruction in CvExtractor.cs tells the AI to use only stated facts and leave unknown values as `null`. For example, if the resume gives no phone number, the profile's phone field should be `null`. A missing collection, such as a skills list, becomes an empty array. Each request starts a fresh agent run. Program.cs sends the returned JSON through the local checks before asking OutputPrinter.cs to print it. You can change the resume or instruction to see how they affect the profile while the required JSON format stays the same.
 
 ## Execution flow
 
-The model produces a proposed profile. The program checks it before printing or saving it. Follow the arrows to see where the AI request ends and the local checks begin.
+OutputPrinter.cs first introduces the source and the separate schema and evidence checks. The model produces a proposed profile, and the program checks it before printing it. Follow the arrows to see where the AI request ends and the local checks begin.
 
 ```mermaid
 flowchart TD
-    A["Program.cs<br/>Read the selected fictional resume"] --> B["CvExtractor.cs + SettingsReader.cs<br/>Read settings and schema; create ChatClientAgent"]
+    A["Program.cs<br/>Read the selected fictional resume"] --> O["OutputPrinter.cs<br/>Introduce the source and local checks"]
+    O --> B["CvExtractor.cs + SettingsReader.cs<br/>Read settings and schema; create ChatClientAgent"]
     B --> C["CvExtractor.cs<br/>Call agent.RunAsync for JSON: one model call"]
     C -->|Answer| D{"CvExtractor.cs<br/>Is the answer nonempty and not cut short?"}
     D -->|Yes| E{"JsonResumeSchemaValidator.cs<br/>Does the JSON match the schema?"}
     E -->|Yes| P["ProfileExtractor.cs<br/>Convert the JSON into profile records"]
     P --> V{"ProfileValidator.cs<br/>Do source evidence and date checks pass?"}
     V -->|Yes| F["ProfileNormalizer.cs<br/>Trim skill names and remove duplicates"]
-    F --> G["Program.cs<br/>Print the profile and save profile.json"]
+    F --> G["OutputPrinter.cs<br/>Print the accepted profile and learning takeaway"]
     G --> H["Exit 0"]
     E -->|No| I["Program.cs<br/>Show the error and exit 1"]
     V -->|No| I
@@ -37,7 +38,7 @@ flowchart TD
 
 The schema defines field names and value types. JsonResumeSchemaValidator.cs checks the JSON against it, and ProfileExtractor.cs converts the accepted JSON into C# records. ProfileValidator.cs then checks that the quoted text exists in the resume and contains the extracted facts. It accepts dates such as `2024`, `2024-01`, or `2024-01-31` without filling in a missing month or day. An end date that is certainly earlier than its start date is rejected.
 
-Only a profile that passes these checks reaches skill cleanup and saving. ProfileNormalizer.cs trims skill names and keeps the first version of each name, ignoring case. A failed check stops the flow; missing input files or settings stop it before the request.
+Only a profile that passes these checks reaches skill cleanup and presentation. ProfileNormalizer.cs trims skill names and keeps the first version of each name, ignoring case. OutputPrinter.cs serializes the accepted records for display using the existing indented JSON format. A failed check stops the flow; missing input files or settings stop it before the request.
 
 CvExtractor.cs creates a ChatClientAgent with its instructions and generation settings in ChatOptions. It supplies the schema through ChatResponseFormat.ForJsonSchema and requests strict output, then calls RunAsync directly. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) supplies the IChatClient and adds provider.require_parameters=true only for OpenRouter. CvExtractor.cs contains no provider branch or provider SDK options. CvExtractor.cs checks the native finish reason and final assistant text before both providers' responses follow the same local schema and evidence checks.
 
@@ -61,7 +62,9 @@ Choose a model and provider that support JSON Schema structured output, temperat
 
 ## Understand the results
 
-An empty answer or one cut short by the output limit is rejected. If the JSON or extracted values fail a check, the program reports where it failed and exits with code 1. A profile that passes the checks is printed and saved as `profile.json` beside the executable. The program prints the file's full path so you can find it. A failed request or validation check leaves a previously saved profile in place.
+An empty answer or one cut short by the output limit is rejected. If the JSON or extracted values fail a check, the program reports where it failed and exits with code 1. OutputPrinter.cs prints a profile only after its schema, evidence, and normalization stages finish. The application displays the indented JSON in the console; it does not save a profile file.
+
+Green headings separate the introduction, accepted profile, and takeaway. Provider details appear in grey. The shared ConsoleOutput.cs helper restores the original console colour, and redirected output stays plain text. The final takeaway suggests trying the ambiguous resume and checking its unknown fields.
 
 A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy will send the same request again. No retry message appears when the first attempt succeeds. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results) for delays and failures after the attempt limit.
 
@@ -80,6 +83,7 @@ You still need to judge meaning: a quote mentioning a qualification does not pro
 
 ```text
 Program.cs                                    Main extraction flow and selected resume
+OutputPrinter.cs                              Stage explanations, accepted JSON display, and takeaway
 CvExtractor.cs                                Extraction instruction, schema, settings, and native agent call
 CandidateProfile.cs                           Typed records and nullable facts
 JsonResumeSchemaValidator.cs                  JSON syntax and schema checks
@@ -89,6 +93,7 @@ ProfileNormalizer.cs                          Skill-name trimming and duplicate 
 profile.schema.json                           Required JSON structure
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
 ../../shared/shared/AiClientFactory.cs        Provider client construction and compatibility
+../../shared/shared/ConsoleOutput.cs          Shared headings and terminal colour handling
 ../../shared/shared/Providers/AiRetryPolicy.cs  Internal bounded HTTP retry policy
 ../../shared/shared/ProviderSettings.cs       Selected provider connection values
 ../../shared/shared.tests/AiClientFactoryTests.cs  Native requests and provider compatibility
@@ -100,7 +105,7 @@ SampleData/profile.example.json              Expected example profile
 structured-output.csproj                      .NET 10 project, JSON validation dependency, and shared reference
 ```
 
-Follow Program.cs from reading the resume to requesting, checking, and saving the profile. The printed JSON lets you inspect both the extracted facts and the quotes used to support them.
+Follow Program.cs from reading the resume to requesting, checking, and presenting the profile. The printed JSON lets you inspect both the extracted facts and the quotes used to support them.
 
 ## Tests
 
