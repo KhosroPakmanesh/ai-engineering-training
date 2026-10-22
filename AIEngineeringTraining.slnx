@@ -27,4 +27,8 @@
     <Project Path="04-function-calling/function-calling/function-calling.csproj" />
     <Project Path="04-function-calling/function-calling.tests/function-calling.tests.csproj" />
   </Folder>
+  <Folder Name="/05-embeddings-semantic-search/">
+    <Project Path="05-embeddings-semantic-search/embeddings-semantic-search/embeddings-semantic-search.csproj" />
+    <Project Path="05-embeddings-semantic-search/embeddings-semantic-search.tests/embeddings-semantic-search.tests.csproj" />
+  </Folder>
 </Solution>

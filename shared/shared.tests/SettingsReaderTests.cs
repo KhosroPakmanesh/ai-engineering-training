@@ -2,6 +2,32 @@ using Xunit;
 
 public class SettingsReaderTests
 {
+    // Embedding configuration must not require, replace, or change the existing chat model.
+    [Theory]
+    [InlineData("openrouter", "OPENROUTER")]
+    [InlineData("gemini", "GEMINI")]
+    public void Embeddings_use_only_the_selected_embedding_model(string provider, string prefix)
+    {
+        ProviderSettings settings = SettingsReader.ParseSettings(
+            [$"AI_PROVIDER={provider}", $"{prefix}_API_KEY=test-key", $"{prefix}_EMBEDDING_MODEL=embedding-model"],
+            useEmbeddingModel: true);
+        Assert.Equal("embedding-model", settings.Model);
+        Assert.Equal("test-key", settings.Key);
+    }
+
+    // A chat model is never silently used as an embedding model.
+    [Theory]
+    [InlineData("openrouter", "OPENROUTER")]
+    [InlineData("gemini", "GEMINI")]
+    public void Missing_embedding_model_is_rejected_without_affecting_chat_settings(string provider, string prefix)
+    {
+        List<string> lines = [$"AI_PROVIDER={provider}", $"{prefix}_API_KEY=test-key", $"{prefix}_MODEL=chat-model"];
+        Assert.Equal("chat-model", SettingsReader.ParseSettings(lines).Model);
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            SettingsReader.ParseSettings(lines, useEmbeddingModel: true));
+        Assert.Contains($"{prefix}_EMBEDDING_MODEL", error.Message);
+    }
+
     // Comments, quotes, and spaces around settings must not change their values.
     [Fact]
     public void Settings_accept_comments_quotes_and_equals_in_values()

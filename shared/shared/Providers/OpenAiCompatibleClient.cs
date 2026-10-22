@@ -3,6 +3,7 @@ using System.ClientModel.Primitives;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;
+using OpenAI.Embeddings;
 using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 internal static class OpenAiCompatibleClient
@@ -10,6 +11,25 @@ internal static class OpenAiCompatibleClient
     // Both current providers use the same SDK transport, retries, and Chat Completions format.
     public static IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient,
         Action<ChatCompletionOptions>? configureOptions = null)
+    {
+        var client = new ChatClient(settings.Model, new ApiKeyCredential(settings.Key), CreateOptions(settings, httpClient));
+        return new CompatibleChatClient(client.AsIChatClient(), configureOptions);
+    }
+
+    // Check and order wire indexes before Microsoft's adapter converts the response into common embedding values.
+    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings settings, HttpClient? httpClient,
+        PipelinePolicy? responsePolicy = null)
+    {
+        OpenAIClientOptions options = CreateOptions(settings, httpClient);
+        options.AddPolicy(new EmbeddingResponseOrderPolicy(), PipelinePosition.BeforeTransport);
+        // Response policies run in reverse order, so provider conventions are handled before index checks.
+        if (responsePolicy is not null) options.AddPolicy(responsePolicy, PipelinePosition.BeforeTransport);
+        var client = new EmbeddingClient(settings.Model, new ApiKeyCredential(settings.Key), options);
+        return client.AsIEmbeddingGenerator();
+    }
+
+    // Chat and embeddings have the same transport, retry limit, and network timeout.
+    private static OpenAIClientOptions CreateOptions(ProviderSettings settings, HttpClient? httpClient)
     {
         OpenAIClientOptions clientOptions = new()
         {
@@ -20,8 +40,7 @@ internal static class OpenAiCompatibleClient
         if (httpClient is not null)
             clientOptions.Transport = new HttpClientPipelineTransport(httpClient);
 
-        var client = new ChatClient(settings.Model, new ApiKeyCredential(settings.Key), clientOptions);
-        return new CompatibleChatClient(client.AsIChatClient(), configureOptions);
+        return clientOptions;
     }
 
     // Keep shared wire-format handling beneath the framework's function loop.

@@ -260,6 +260,98 @@ public class AiClientFactoryTests
         Assert.Equal(cancelBeforeRequest ? 0 : 1, handler.RequestBodies.Count);
     }
 
+    // Both strategies must send Microsoft embedding requests through their selected endpoints.
+    [Theory]
+    [InlineData("openrouter", "OPENROUTER", "https://openrouter.ai/api/v1/embeddings")]
+    [InlineData("gemini", "GEMINI", "https://generativelanguage.googleapis.com/v1beta/openai/embeddings")]
+    public async Task Embedding_requests_use_selected_provider_model_and_native_usage(string provider, string prefix, string endpoint)
+    {
+        ProviderSettings settings = SettingsReader.ParseSettings(
+            [$"AI_PROVIDER={provider}", $"{prefix}_API_KEY=test-key", $"{prefix}_EMBEDDING_MODEL=embedding-model"],
+            useEmbeddingModel: true);
+        const string responseBody = """
+            {"object":"list","model":"embedding-model","data":[
+              {"object":"embedding","index":0,"embedding":[1.0,0.0]},
+              {"object":"embedding","index":1,"embedding":[0.0,1.0]}],
+             "usage":{"prompt_tokens":12,"total_tokens":12}}
+            """;
+        using var handler = new ResponseHandler(responseBody);
+        using var httpClient = new HttpClient(handler);
+        using IEmbeddingGenerator<string, Embedding<float>> generator = new AiClientFactory().CreateEmbeddingGenerator(settings, httpClient);
+        using var cancellation = new CancellationTokenSource();
+
+        GeneratedEmbeddings<Embedding<float>> embeddings = await generator.GenerateAsync(
+            ["Docker services", "Garden budget"], cancellationToken: cancellation.Token);
+
+        Assert.Equal(new Uri(endpoint), Assert.Single(handler.RequestUris));
+        using JsonDocument document = JsonDocument.Parse(Assert.Single(handler.RequestBodies));
+        Assert.Equal("embedding-model", document.RootElement.GetProperty("model").GetString());
+        Assert.Equal(new[] { "Docker services", "Garden budget" }, document.RootElement.GetProperty("input").EnumerateArray().Select(value => value.GetString()));
+        Assert.True(handler.HadCancelableToken);
+        Assert.Equal(2, embeddings.Count);
+        Assert.All(embeddings, embedding => Assert.Equal("embedding-model", embedding.ModelId));
+        Assert.Equal(12, embeddings.Usage?.InputTokenCount);
+        Assert.Equal(12, embeddings.Usage?.TotalTokenCount);
+    }
+
+    // The common interface must preserve native API errors and avoid retrying permanent failures.
+    [Fact]
+    public async Task Embedding_errors_preserve_native_provider_details()
+    {
+        using var handler = new ResponseHandler("""{"error":{"message":"Embedding model is unavailable"}}""", status: 404);
+        using var httpClient = new HttpClient(handler);
+        using IEmbeddingGenerator<string, Embedding<float>> generator = new AiClientFactory().CreateEmbeddingGenerator(TestSettings(), httpClient);
+
+        ClientResultException error = await Assert.ThrowsAsync<ClientResultException>(async () =>
+            await generator.GenerateAsync(["Docker service"]));
+
+        Assert.Equal(404, error.Status);
+        Assert.Contains("Embedding model is unavailable", error.Message);
+        Assert.Single(handler.RequestBodies);
+    }
+
+    // Restore Gemini's omitted zero before ordering and converting vectors into Microsoft's embedding values.
+    [Fact]
+    public async Task Gemini_restores_omitted_zero_before_returning_embeddings_in_input_order()
+    {
+        const string responseBody = """
+            {"object":"list","model":"test-model","data":[
+              {"object":"embedding","index":1,"embedding":[0.0,1.0]},
+              {"object":"embedding","embedding":[1.0,0.0]}],
+             "usage":{"prompt_tokens":12,"total_tokens":12}}
+            """;
+        using var handler = new ResponseHandler(responseBody);
+        using var httpClient = new HttpClient(handler);
+        using IEmbeddingGenerator<string, Embedding<float>> generator = new AiClientFactory().CreateEmbeddingGenerator(TestSettings("Gemini"), httpClient);
+
+        GeneratedEmbeddings<Embedding<float>> embeddings = await generator.GenerateAsync(["First", "Second"]);
+
+        Assert.Equal(new[] { 1f, 0f }, embeddings[0].Vector.ToArray());
+        Assert.Equal(new[] { 0f, 1f }, embeddings[1].Vector.ToArray());
+        Assert.All(embeddings, embedding => Assert.Equal("test-model", embedding.ModelId));
+    }
+
+    // Multiple omissions are ambiguous and must be rejected before Microsoft's adapter drops the indexes.
+    [Fact]
+    public async Task Gemini_does_not_repair_ambiguous_embedding_indexes()
+    {
+        const string responseBody = """
+            {"object":"list","model":"test-model","data":[
+              {"object":"embedding","embedding":[0.0,1.0]},
+              {"object":"embedding","embedding":[1.0,0.0]}],
+             "usage":{"prompt_tokens":12,"total_tokens":12}}
+            """;
+        using var handler = new ResponseHandler(responseBody);
+        using var httpClient = new HttpClient(handler);
+        using IEmbeddingGenerator<string, Embedding<float>> generator = new AiClientFactory().CreateEmbeddingGenerator(TestSettings("Gemini"), httpClient);
+
+        InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await generator.GenerateAsync(["First", "Second"]));
+
+        Assert.Contains("indexes", error.Message);
+        Assert.Single(handler.RequestBodies);
+    }
+
     // These fixtures use no real credentials or provider connections.
     private static ProviderSettings TestSettings(string provider = "OpenRouter") =>
         new(provider, "test-key", "test-model", new Uri("https://example.invalid/v1"));
