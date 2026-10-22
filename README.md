@@ -1,21 +1,49 @@
-# ai-engineering-training
+# AI Engineering Training
 
-These small C#/.NET 10 experiments help you learn by changing an input and inspecting the AI's response. Open [AIEngineeringTraining.slnx](AIEngineeringTraining.slnx) to load the projects.
+Small C#/.NET 10 console applications for learning how AI systems work. Change an input, run a project, and inspect the result.
 
-- [Prompt engineering](01-prompt-engineering/prompt-engineering/README.md): change the instructions given to the AI and compare three summaries of the same resume.
-- [Structured output](02-structured-output/structured-output/README.md): ask the AI to turn a resume into a JSON profile, then check its format and supporting facts.
-- [Context engineering](03-context-engineering/context-engineering/README.md): choose which project descriptions the AI receives and compare its answer with one based on all six descriptions.
-- [Function calling](04-function-calling/function-calling/README.md): let the model select a C# calculator, merge overlapping job dates, and answer with its verified experience total.
-- [Embeddings and semantic search](05-embeddings-semantic-search/embeddings-semantic-search/README.md): compare meaning and keyword search over twelve fictional projects using SQLite and cosine similarity.
+## Projects
 
-The first four applications use Microsoft Agent Framework directly. Each of those lessons creates a ChatClientAgent, declares its prompts and generation settings in ChatOptions, and calls RunAsync. Function calling also creates native tools with AIFunctionFactory.Create. [AiClientFactory.cs](shared/shared/AiClientFactory.cs) manually registers internal provider strategies in its constructor and selects one to create a disposable IChatClient. [OpenRouterProvider.cs](shared/shared/Providers/OpenRouterProvider.cs) and [GeminiProvider.cs](shared/shared/Providers/GeminiProvider.cs) keep their connection details separate. [SettingsReader.cs](shared/shared/SettingsReader.cs) reads the selected provider into [ProviderSettings](shared/shared/ProviderSettings.cs). Each lesson uses native cancellation and checks its final response directly. The entry points print native exception messages. HTTP retries and compatible wire-format handling stay internal to the provider clients. Changing the configured provider or model leaves lesson code unchanged. The [shared tests](shared/shared.tests/shared.tests.csproj) exercise the native SDK and framework through a local HTTP transport.
+- [Prompt engineering](01-prompt-engineering/prompt-engineering/README.md): compare three instructions for summarizing the same resume.
+- [Structured output](02-structured-output/structured-output/README.md): extract a JSON profile from a resume and check its format and facts.
+- [Context engineering](03-context-engineering/context-engineering/README.md): compare answers using all project descriptions or a selected subset.
+- [Function calling](04-function-calling/function-calling/README.md): let the AI call a C# calculator to total work experience without counting overlapping dates twice.
+- [Embeddings and semantic search](05-embeddings-semantic-search/embeddings-semantic-search/README.md): compare meaning and keyword search over twelve fictional projects.
 
-Create `shared/shared/.env` from [shared/shared/.env.example](shared/shared/.env.example). Choose an AI provider with `AI_PROVIDER`, then configure its API key and model using the [shared setup instructions](shared/shared/README.md#run). Every application reads a copy of this same file from its build output folder. Rebuild after changing it. To try a lesson, open its project folder and run `dotnet run`.
+## Prerequisites
 
-The current provider strategies use the OpenAI .NET SDK for Chat Completions and embeddings. Chat lessons consume native AgentResponse and UsageDetails values. The fifth lesson uses Microsoft.Extensions.AI IEmbeddingGenerator and GeneratedEmbeddings values, with local validation, normalization, persistence, and ranking. AiClientFactory creates the common embedding generator while SDK types, raw index checks, and response ordering stay inside shared provider plumbing. Configure OPENROUTER_EMBEDDING_MODEL or GEMINI_EMBEDDING_MODEL in the same shared settings file for this lesson; existing chat models stay unchanged. Requests send the lesson's fictional data to the selected remote service and may charge your account. Choose a model that supports the lesson's settings; the structured-output lesson also needs JSON Schema support, and function-calling needs function tools. See the [shared setup](shared/shared/README.md) and [Gemini compatibility documentation](https://ai.google.dev/gemini-api/docs/openai).
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+- An API key from [OpenRouter](https://openrouter.ai/settings/keys) or [Google AI Studio](https://aistudio.google.com/apikey) for Gemini.
 
-The shared HTTP retry policy allows two retries for temporary provider failures. Each model call normally sends one HTTP request and can make up to three attempts. Each complete agent run has one 120-second deadline covering every model turn, tool execution, and retry wait. Each lesson's README lists its model calls and maximum HTTP attempts. Each embedding call also has one 120-second deadline covering its attempts and waits. The full solution test run makes thirteen model calls on success (eleven chat calls and two embedding calls) and can make up to 39 HTTP attempts; deterministic tests make no real API requests.
+## Choose a suitable model
 
-[AGENTS.md](AGENTS.md) explains how to add projects, share the setup code and settings, and write READMEs that teach each experiment in plain language.
+The first four projects need a chat model. Structured output also needs JSON Schema support, which lets you define the answer's fields and value types. Function calling needs tool support so the model can request a C# function. Check each project's README for its temperature and output limits; the selected model must accept these settings.
 
-To create another learning project, use the repository-local [create-learning-project skill](.agents/skills/create-learning-project/SKILL.md): write `$create-learning-project`, followed by what you want the project to demonstrate. The skill follows AGENTS.md for the code, checks, and README.
+**OpenRouter:** Browse the [model catalog](https://openrouter.ai/models) and choose a text model. Check its [supported parameters](https://openrouter.ai/docs/guides/overview/models#supported-parameters): `temperature` and `max_tokens`, plus `structured_outputs` for structured output or `tools` and `tool_choice` for function calling. For structured output, also check `structured_outputs` in the model page's Providers section, as [support varies by endpoint](https://openrouter.ai/docs/guides/features/structured-outputs#model-support). Copy the full model ID, including its provider prefix, into `OPENROUTER_MODEL`.
+
+**Gemini:** Browse the [model catalog](https://ai.google.dev/gemini-api/docs/models), open a text model, and check its capabilities for structured output or function calling as needed. Copy the model code into `GEMINI_MODEL`. These projects use Gemini's [OpenAI-compatible API](https://ai.google.dev/gemini-api/docs/openai), so check compatibility with the lesson's settings there.
+
+For semantic search, choose an embedding model, which converts text into numbers for comparison. Use OpenRouter's **Embeddings** category or the [Gemini embeddings guide](https://ai.google.dev/gemini-api/docs/embeddings). Set `OPENROUTER_EMBEDDING_MODEL` or `GEMINI_EMBEDDING_MODEL` separately from the chat model.
+
+## Quick start
+
+1. Create `shared/shared/.env` from [shared/shared/.env.example](shared/shared/.env.example).
+2. Set `AI_PROVIDER` to `openrouter` or `gemini`, then fill in that provider's values:
+
+   | Provider | API key | Chat model | Embedding model |
+   | --- | --- | --- | --- |
+   | OpenRouter | `OPENROUTER_API_KEY` | `OPENROUTER_MODEL` | `OPENROUTER_EMBEDDING_MODEL` |
+   | Gemini | `GEMINI_API_KEY` | `GEMINI_MODEL` | `GEMINI_EMBEDDING_MODEL` |
+
+   Only the selected provider needs valid values. The first four projects use the chat model; semantic search uses the embedding model.
+
+3. From the repository root, run the first project:
+
+   ```sh
+   cd 01-prompt-engineering/prompt-engineering
+   dotnet run
+   ```
+
+To try another project, run `dotnet run` from its application folder. In Visual Studio, open [AIEngineeringTraining.slnx](AIEngineeringTraining.slnx) and choose the application as the startup project.
+
+Every project uses the same `.env` file, which Git ignores. Builds copy it into the executable's folder, so rebuild after changing it. See the [shared setup instructions](shared/shared/README.md#run) for more detail and [AiClientFactory.cs](shared/shared/AiClientFactory.cs) for provider connections.
