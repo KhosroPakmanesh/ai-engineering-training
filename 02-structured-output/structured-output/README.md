@@ -1,18 +1,18 @@
 # Structured Output: one small experiment
 
-Structured output means asking the AI to return information in a fixed format that your code can read and check. Here, the AI turns a fictional resume into a JSON profile with named fields such as `name` and `skills`. **Program.cs** follows the steps from reading the resume to presenting the result. **CvExtractor.cs** asks the model for the profile. **JsonResumeSchemaValidator.cs** checks its JSON shape, **ProfileExtractor.cs** converts it into records, **ProfileValidator.cs** checks the facts against the resume, and **ProfileNormalizer.cs** cleans up supported skill names. **OutputPrinter.cs** explains the stages and prints the accepted profile.
+Structured output means asking the AI to return information in a fixed format that your code can read and check. Here, the AI turns a fictional resume into a JSON profile with named fields such as `name` and `skills`. **Program.cs** follows the steps from reading the resume to presenting the result. **CvExtractor.cs** asks the model for the profile and returns Microsoft's `AgentResponse<CandidateProfile>`. **JsonResumeSchemaValidator.cs** checks the original JSON before Program.cs reads `response.Result`, which lets Agent Framework convert it into records. **ProfileValidator.cs** checks the facts against the resume, and **ProfileNormalizer.cs** cleans up supported skill names. **OutputPrinter.cs** explains the stages and prints the accepted profile.
 
-| File | Concept |
+| File or framework member | Concept |
 | --- | --- |
 | [profile.schema.json](profile.schema.json) | Define which fields the JSON must contain and which kinds of values they accept. |
 | [CandidateProfile.cs](CandidateProfile.cs) | Hold the accepted profile in C# records, with null for unknown facts. |
 | [CvExtractor.cs](CvExtractor.cs) | Ask the AI to fill the profile using the resume's facts. |
 | [JsonResumeSchemaValidator.cs](JsonResumeSchemaValidator.cs) | Check JSON syntax and the required field names and value types. |
-| [ProfileExtractor.cs](ProfileExtractor.cs) | Convert the checked JSON into C# records. |
+| `AgentResponse<CandidateProfile>.Result` | Let Agent Framework convert the checked JSON into C# records. |
 | [ProfileValidator.cs](ProfileValidator.cs) | Check supporting quotes, text facts, dates, and stated durations. |
 | [ProfileNormalizer.cs](ProfileNormalizer.cs) | Trim supported skill names and remove duplicates. |
 
-The instruction in CvExtractor.cs tells the AI to use only stated facts and leave unknown values as `null`. For example, if the resume gives no phone number, the profile's phone field should be `null`. A missing collection, such as a skills list, becomes an empty array. Each request starts a fresh agent run. Program.cs sends the returned JSON through the local checks before asking OutputPrinter.cs to print it. You can change the resume or instruction to see how they affect the profile while the required JSON format stays the same.
+The instruction in CvExtractor.cs tells the AI to use only stated facts and leave unknown values as `null`. For example, if the resume gives no phone number, the profile's phone field should be `null`. A missing collection, such as a skills list, becomes an empty array. Each request starts a fresh agent run. Program.cs validates `response.Text`, reads the typed `response.Result`, and completes the evidence checks before asking OutputPrinter.cs to print it. You can change the resume or instruction to see how they affect the profile while the required JSON format stays the same.
 
 ## Execution flow
 
@@ -24,8 +24,9 @@ flowchart TD
     O --> B["CvExtractor.cs + SettingsReader.cs<br/>Read settings and schema; create ChatClientAgent"]
     B --> C["CvExtractor.cs<br/>Call agent.RunAsync for JSON: one model call"]
     C -->|Answer| D{"CvExtractor.cs<br/>Is the answer nonempty and not cut short?"}
-    D -->|Yes| E{"JsonResumeSchemaValidator.cs<br/>Does the JSON match the schema?"}
-    E -->|Yes| P["ProfileExtractor.cs<br/>Convert the JSON into profile records"]
+    D -->|Yes| R["CvExtractor.cs<br/>Wrap the original response in AgentResponse of CandidateProfile"]
+    R --> E{"JsonResumeSchemaValidator.cs<br/>Does response.Text match the schema?"}
+    E -->|Yes| P["Program.cs + Agent Framework<br/>Read response.Result to create profile records"]
     P --> V{"ProfileValidator.cs<br/>Do source evidence and date checks pass?"}
     V -->|Yes| F["ProfileNormalizer.cs<br/>Trim skill names and remove duplicates"]
     F --> G["OutputPrinter.cs<br/>Print the accepted profile and learning takeaway"]
@@ -34,13 +35,16 @@ flowchart TD
     V -->|No| I
     C -->|API error| I
     D -->|No| I
+    P -->|Conversion error| I
 ```
 
-The schema defines field names and value types. JsonResumeSchemaValidator.cs checks the JSON against it, and ProfileExtractor.cs converts the accepted JSON into C# records. ProfileValidator.cs then checks that the quoted text exists in the resume and contains the extracted facts. It accepts dates such as `2024`, `2024-01`, or `2024-01-31` without filling in a missing month or day. An end date that is certainly earlier than its start date is rejected.
+The schema defines field names and value types. JsonResumeSchemaValidator.cs checks the original `response.Text` against it. Only then does Program.cs read `response.Result` and ask Agent Framework to create the C# records. This order matters: converting JSON into a record can ignore an unknown field, so validating JSON serialized from that record would miss the original violation. ProfileValidator.cs then checks that the quoted text exists in the resume and contains the extracted facts. It accepts dates such as `2024`, `2024-01`, or `2024-01-31` without filling in a missing month or day. An end date that is certainly earlier than its start date is rejected.
 
 Only a profile that passes these checks reaches skill cleanup and presentation. ProfileNormalizer.cs trims skill names and keeps the first version of each name, ignoring case. OutputPrinter.cs serializes the accepted records for display using the existing indented JSON format. A failed check stops the flow; missing input files or settings stop it before the request.
 
 CvExtractor.cs creates a ChatClientAgent with its instructions and generation settings in ChatOptions. It supplies the schema through ChatResponseFormat.ForJsonSchema and requests strict output, then calls RunAsync directly. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) supplies the IChatClient and adds provider.require_parameters=true only for OpenRouter. CvExtractor.cs contains no provider branch or provider SDK options. CvExtractor.cs checks the native finish reason and final assistant text before both providers' responses follow the same local schema and evidence checks.
+
+The extractor returns `new AgentResponse<CandidateProfile>(response, jsonOptions)`. This native framework type retains the original JSON and converts it only when `Result` is read; wrapping it makes no additional model request. The pinned Agent Framework version's `RunAsync<CandidateProfile>` helper generates a schema from the C# types, replacing the authored request schema. That generated schema omits rules such as nonempty quotes and nonnegative durations. Keeping `RunAsync` with the authored schema, followed by Microsoft's typed response, preserves both the request contract and the separate local validation stages.
 
 The [shared retry policy](../../shared/shared/Providers/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside the agent call. It keeps the same schema, instructions, and resume. Local schema or evidence failures are not retried.
 
@@ -84,10 +88,9 @@ You still need to judge meaning: a quote mentioning a qualification does not pro
 ```text
 Program.cs                                    Main extraction flow and selected resume
 OutputPrinter.cs                              Stage explanations, accepted JSON display, and takeaway
-CvExtractor.cs                                Extraction instruction, schema, settings, and native agent call
+CvExtractor.cs                                Extraction instruction, authored schema, native request, and typed response
 CandidateProfile.cs                           Typed records and nullable facts
 JsonResumeSchemaValidator.cs                  JSON syntax and schema checks
-ProfileExtractor.cs                           JSON conversion into typed records
 ProfileValidator.cs                           Source facts, evidence, dates, and durations
 ProfileNormalizer.cs                          Skill-name trimming and duplicate removal
 profile.schema.json                           Required JSON structure
@@ -109,17 +112,16 @@ Follow Program.cs from reading the resume to requesting, checking, and presentin
 
 ## Tests
 
-The solution includes `structured-output.tests`, a small xUnit project with ten cases: eight local cases and two integration cases. Test files match the source files they check.
+The solution includes `structured-output.tests`, a small xUnit project with thirteen cases: eleven local cases and two integration cases. Test files match the source files they check.
 
 | Test file | Checks |
 | --- | --- |
-| [CvExtractorTests.cs](../structured-output.tests/CvExtractorTests.cs) | Two real model responses pass the complete schema, parsing, evidence, and normalization flow; unknown facts remain null. |
-| [JsonResumeSchemaValidatorTests.cs](../structured-output.tests/JsonResumeSchemaValidatorTests.cs) | Malformed JSON and schema violations are rejected. |
-| [ProfileExtractorTests.cs](../structured-output.tests/ProfileExtractorTests.cs) | The known example becomes typed records through the local acceptance flow. |
+| [CvExtractorTests.cs](../structured-output.tests/CvExtractorTests.cs) | A local response fixture passes schema validation, framework conversion, evidence validation, and normalization. Two integration cases call the public extractor and check real responses and unknown facts. |
+| [JsonResumeSchemaValidatorTests.cs](../structured-output.tests/JsonResumeSchemaValidatorTests.cs) | Malformed JSON, duplicate field names, multiple top-level objects, unknown fields, and schema violations are rejected. |
 | [ProfileValidatorTests.cs](../structured-output.tests/ProfileValidatorTests.cs) | Source facts and exact quotes, explicitly stated durations, partial dates, chronology, a valid call after a rejected profile, and independent concurrent validations. |
 | [ProfileNormalizerTests.cs](../structured-output.tests/ProfileNormalizerTests.cs) | Skill names are trimmed and the first duplicate is preserved with its evidence. |
 
-The integration tests call `CvExtractor.ExtractAsync`, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. [ProfileTestData.cs](../structured-output.tests/TestData/ProfileTestData.cs) supplies fresh records from those inputs. ProfileValidator creates a fresh instance for each call. That instance holds the source text, filename, and errors, so test classes can run independently. A concurrency regression test starts checks for different fictional sources together and verifies that each accepted or rejected profile keeps its own result. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+The integration tests call the current public `CvExtractor.ExtractAsync(rawStringResume, resumeFileName)` method, just like the console app, and use the same settings and resumes copied into the test output folder through the project reference. Both the application and integration tests validate the original JSON before reading `response.Result`, then check evidence and normalize the profile. Local tests use fixtures and framework response types; they make zero real API requests and do not exercise the extractor's HTTP request or completeness checks. [ProfileTestData.cs](../structured-output.tests/TestData/ProfileTestData.cs) reads fixtures directly with System.Text.Json and supplies fresh records for component tests. ProfileValidator creates a fresh instance for each call. That instance holds the source text, filename, and errors, so test classes can run independently. A concurrency regression test starts checks for different fictional sources together and verifies that each accepted or rejected profile keeps its own result. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 

@@ -10,7 +10,7 @@ public static class OutputPrinter
         Console.WriteLine(
             $"Source: SampleData/{resumeFileName}\n" +
             "The model proposes a profile with fixed fields. Unknown facts should stay null.\n" +
-            "Local stages check the JSON schema, convert it to records, and check exact resume quotes.\n" +
+            "Local stages check the JSON schema, read the framework's typed profile, and check exact resume quotes.\n" +
             "Only then are skill names trimmed and duplicates removed.");
     }
 

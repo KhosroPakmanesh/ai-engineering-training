@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -24,15 +25,17 @@ public static class CvExtractor
         Return only JSON matching this schema:
         """ + "\n" + schema;
 
-    // Show the framework's schema request beside the lesson's prompt and settings.
-    public static async Task<string> ExtractAsync(string rawStringResume, string resumeFileName,
-        CancellationToken cancellationToken = default)
+    // Return the framework response so callers can check its JSON before reading the typed Result.
+    public static async Task<AgentResponse<CandidateProfile>> ExtractAsync
+        (string rawStringResume, string resumeFileName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(rawStringResume))
             throw new InvalidOperationException("The CV is empty.");
 
         string folder = AppContext.BaseDirectory;
-        ProviderSettings settings = await SettingsReader.ReadSettingsAsync(folder, cancellationToken);
+
+        ProviderSettings settings = await SettingsReader
+            .ReadSettingsAsync(folder, cancellationToken);
 
         string resumeSchema = await File.ReadAllTextAsync
             (Path.Combine(folder, "profile.schema.json"), cancellationToken);
@@ -74,6 +77,13 @@ public static class CvExtractor
             throw new InvalidDataException(
                 "The provider returned no response text. Check the model and its reasoning/output token budget.");
 
-        return answer;
+        // Result deserializes only when the caller reads it, after validating the original JSON against our schema.
+        JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true,
+            // The typed response needs metadata describing the C# records when Result is read.
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+        };
+        return new AgentResponse<CandidateProfile>(response, jsonOptions);
     }
 }

@@ -1,9 +1,29 @@
 using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Xunit;
 using Xunit.Abstractions;
 
 public class CvExtractorTests(ITestOutputHelper output)
 {
+    // A local fixture checks the post-request stages without credentials or a model call.
+    [Fact]
+    public void Example_response_passes_schema_conversion_evidence_and_normalization()
+    {
+        string rawStringResume = ProfileTestData.ReadSample("resume.md");
+        string jsonResume = ProfileTestData.ReadSample("profile.example.json");
+        var rawResponse = new AgentResponse(new ChatMessage(ChatRole.Assistant, jsonResume));
+        var response = new AgentResponse<CandidateProfile>(rawResponse, JsonSerializerOptions.Web);
+
+        Assert.Equal(jsonResume, response.Text);
+        JsonResumeSchemaValidator.ValidateSchema(response.Text);
+        CandidateProfile profile = response.Result;
+        ProfileValidator.ValidateProfile(profile, rawStringResume, "resume.md");
+        profile = ProfileNormalizer.NormalizeProfile(profile);
+        Assert.Equal("Mira Example", profile.Name);
+        Assert.Equal(2, profile.Experience.Count);
+    }
+
     // Model responses pass through the same local checks and cleanup as Program.cs.
     [Theory]
     [InlineData("resume.md", false)]
@@ -12,9 +32,9 @@ public class CvExtractorTests(ITestOutputHelper output)
     public async Task Extract_returns_a_typed_profile_and_preserves_unknowns(string resumeFileName, bool hasMissingFacts)
     {
         string rawStringResume = ProfileTestData.ReadSample(resumeFileName);
-        string jsonResume = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
-        JsonResumeSchemaValidator.ValidateSchema(jsonResume);
-        CandidateProfile profile = ProfileExtractor.ExtractProfile(jsonResume);
+        AgentResponse<CandidateProfile> response = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
+        JsonResumeSchemaValidator.ValidateSchema(response.Text);
+        CandidateProfile profile = response.Result;
         ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);
         profile = ProfileNormalizer.NormalizeProfile(profile);
 

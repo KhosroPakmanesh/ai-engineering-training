@@ -51,7 +51,9 @@ public static class SqliteSearchIndex
     {
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
-            DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
         }.ToString());
 
         connection.Open();

@@ -1,3 +1,5 @@
+using Microsoft.Agents.AI;
+
 const string resumeFileName = "resume.md";
 const string resumeFile = $"SampleData/{resumeFileName}";
 
@@ -11,12 +13,13 @@ try
     OutputPrinter.PrintIntroduction(resumeFileName);
 
     // The model proposes a JSON profile; local checks decide whether to accept it.
-    string jsonResume = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
+    AgentResponse<CandidateProfile> response = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
 
     // Check JSON field names and value types before creating profile records.
-    JsonResumeSchemaValidator.ValidateSchema(jsonResume);
+    JsonResumeSchemaValidator.ValidateSchema(response.Text);
 
-    CandidateProfile profile = ProfileExtractor.ExtractProfile(jsonResume);
+    // Result asks Agent Framework to convert the checked JSON into the profile records.
+    CandidateProfile profile = response.Result;
 
     // Correct JSON structure is not enough: each fact also needs an exact quote from the resume.
     ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);

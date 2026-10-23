@@ -8,6 +8,12 @@
   <ItemGroup>
     <ProjectReference Include="../../shared/shared/shared.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="CommunityToolkit.VectorData.SqliteVec" Version="1.0.3-preview" />
     <None Update="SampleData/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Compile one entry point. Plain dotnet run continues to use Program.cs. -->
+  <ItemGroup>
+    <Compile Remove="AlternativeProgram.cs" Condition="'$(UseAlternativeProgram)' != 'true'" />
+    <Compile Remove="Program.cs" Condition="'$(UseAlternativeProgram)' == 'true'" />
   </ItemGroup>
 </Project>
