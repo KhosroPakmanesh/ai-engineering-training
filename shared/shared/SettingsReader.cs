@@ -21,6 +21,7 @@ public static class SettingsReader
         if (!settings.TryGetValue($"{prefix}_API_KEY", out string? key) || string.IsNullOrWhiteSpace(key) || key == "your-key" ||
             !settings.TryGetValue(modelKey, out string? model) || string.IsNullOrWhiteSpace(model) || model is "your-model" or "your-model-id")
             throw new InvalidOperationException($"Fill in {prefix}_API_KEY and {modelKey} in shared/shared/.env, then rebuild. No requests were made.");
+
         return new(provider.Name, key, model, provider.Endpoint);
     }
     // Split only at the first equals sign because a setting value may contain another.
@@ -33,6 +34,7 @@ public static class SettingsReader
             string[] pair = line.Split('=', 2);
             if (pair.Length == 2) settings[pair[0].Trim()] = pair[1].Trim().Trim('"', '\'');
         }
+
         return settings;
     }
 }

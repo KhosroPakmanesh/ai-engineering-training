@@ -9,6 +9,7 @@ Small C#/.NET 10 console applications for learning how AI systems work. Change a
 - [Context engineering](03-context-engineering/context-engineering/README.md): compare answers using all project descriptions or a selected subset.
 - [Function calling](04-function-calling/function-calling/README.md): let the AI call a C# calculator to total work experience without counting overlapping dates twice.
 - [Embeddings and semantic search](05-embeddings-semantic-search/embeddings-semantic-search/README.md): compare meaning and keyword search over twelve fictional projects.
+- [RAG and vector databases](06-rag-vector-databases/rag-vector-databases/README.md): retrieve fictional project passages with SQLite or Qdrant, then answer with checked citations.
 
 ## Prerequisites
 
@@ -35,7 +36,7 @@ For semantic search, choose an embedding model, which converts text into numbers
    | OpenRouter | `OPENROUTER_API_KEY` | `OPENROUTER_MODEL` | `OPENROUTER_EMBEDDING_MODEL` |
    | Gemini | `GEMINI_API_KEY` | `GEMINI_MODEL` | `GEMINI_EMBEDDING_MODEL` |
 
-   Only the selected provider needs valid values. The first four projects use the chat model; semantic search uses the embedding model.
+   Only the selected provider needs valid values. The first four projects use the chat model; semantic search uses the embedding model; RAG uses both models.
 
 3. From the repository root, run the first project:
 

@@ -17,13 +17,17 @@ public sealed class AiClientFactory
     }
 
     // Keep selection here while each strategy owns its connection and provider-specific behavior.
-    public IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient = null) =>
-        SelectProvider(settings.Name).CreateClient(settings, httpClient);
+    public IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient = null)
+    {
+        return SelectProvider(settings.Name).CreateClient(settings, httpClient);
+    }
 
     // Lessons use Microsoft's common embedding interface while provider SDK details stay internal.
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator
-        (ProviderSettings settings, HttpClient? httpClient = null) =>
-        SelectProvider(settings.Name).CreateEmbeddingGenerator(settings, httpClient);
+        (ProviderSettings settings, HttpClient? httpClient = null)
+    {
+        return SelectProvider(settings.Name).CreateEmbeddingGenerator(settings, httpClient);
+    }
 
     // Configuration and client creation use the same registrations and supported provider names.
     internal IAiProviderStrategy SelectProvider(string name)

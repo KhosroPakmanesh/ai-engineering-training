@@ -4,9 +4,13 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/06-rag-vector-databases/">
+    <Project Path="06-rag-vector-databases/rag-vector-databases.tests/rag-vector-databases.tests.csproj" />
+    <Project Path="06-rag-vector-databases/rag-vector-databases/rag-vector-databases.csproj" />
+  </Folder>
   <Folder Name="/shared/">
-    <Project Path="shared/shared/shared.csproj" />
     <Project Path="shared/shared.tests/shared.tests.csproj" />
+    <Project Path="shared/shared/shared.csproj" />
   </Folder>
   <Folder Name="/solution-items/">
     <File Path="AGENTS.md" />
@@ -16,19 +20,19 @@
     <Project Path="01-prompt-engineering/prompt-engineering/prompt-engineering.csproj" />
   </Folder>
   <Folder Name="/02-structured-output/">
-    <Project Path="02-structured-output/structured-output/structured-output.csproj" />
     <Project Path="02-structured-output/structured-output.tests/structured-output.tests.csproj" />
+    <Project Path="02-structured-output/structured-output/structured-output.csproj" />
   </Folder>
   <Folder Name="/03-context-engineering/">
-    <Project Path="03-context-engineering/context-engineering/context-engineering.csproj" />
     <Project Path="03-context-engineering/context-engineering.tests/context-engineering.tests.csproj" />
+    <Project Path="03-context-engineering/context-engineering/context-engineering.csproj" />
   </Folder>
   <Folder Name="/04-function-calling/">
-    <Project Path="04-function-calling/function-calling/function-calling.csproj" />
     <Project Path="04-function-calling/function-calling.tests/function-calling.tests.csproj" />
+    <Project Path="04-function-calling/function-calling/function-calling.csproj" />
   </Folder>
   <Folder Name="/05-embeddings-semantic-search/">
-    <Project Path="05-embeddings-semantic-search/embeddings-semantic-search/embeddings-semantic-search.csproj" />
     <Project Path="05-embeddings-semantic-search/embeddings-semantic-search.tests/embeddings-semantic-search.tests.csproj" />
+    <Project Path="05-embeddings-semantic-search/embeddings-semantic-search/embeddings-semantic-search.csproj" />
   </Folder>
 </Solution>
