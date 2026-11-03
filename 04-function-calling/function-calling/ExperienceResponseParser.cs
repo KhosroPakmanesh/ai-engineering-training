@@ -5,24 +5,21 @@ using Microsoft.Extensions.AI;
 public static class ExperienceResponseParser
 {
     // AskAsync checks the final answer, and the caller validates tool execution before parsing.
-    public static ParsedExperienceResponse Parse(AgentResponse response)
+    public static ParsedExperienceResponse Parse(AgentResponse agentResponse)
     {
-        string answer = response.Messages.Last(message => message.Role == ChatRole.Assistant).Text;
-        List<FunctionResultContent> toolResults = response.Messages
-            .SelectMany(message => message.Contents)
+        string answerString = agentResponse.Messages.Last(chatMessage => chatMessage.Role == ChatRole.Assistant).Text;
+        List<FunctionResultContent> toolFunctionResultContents = agentResponse.Messages
+            .SelectMany(chatMessage => chatMessage.Contents)
             .OfType<FunctionResultContent>()
             .ToList();
 
-        ExperienceResult result = JsonSerializer.SerializeToElement(toolResults[0].Result)
+        ExperienceResult experienceResult = JsonSerializer.SerializeToElement(toolFunctionResultContents[0].Result)
             .Deserialize<ExperienceResult>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
             ?? throw new InvalidDataException("The calculation returned no structured result.");
 
         // Each completed Chat Completions turn contributes one assistant message.
-        int modelCallCount = response.Messages.Count(message => message.Role == ChatRole.Assistant);
-        return new ParsedExperienceResponse(
-            Answer: answer,
-            Result: result,
-            ModelCallCount: modelCallCount,
-            ToolExecutionCount: toolResults.Count);
+        int modelCallCountInt = agentResponse.Messages.Count(chatMessage => chatMessage.Role == ChatRole.Assistant);
+        return new ParsedExperienceResponse(AnswerString: answerString, ExperienceResult: experienceResult,
+            ModelCallCountInt: modelCallCountInt, ToolExecutionCountInt: toolFunctionResultContents.Count);
     }
 }

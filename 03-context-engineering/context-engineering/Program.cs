@@ -1,39 +1,51 @@
-const string question = "Which project used PostgreSQL?";
-const string sourceFile = "projects.md";
+const string questionString = "Which project used PostgreSQL?";
+const string sourceFileString = "projects.md";
 
 try
 {
-    // Reject an unusable question before loading inputs or making model requests.
-    if (string.IsNullOrWhiteSpace(question) || question.Length > 500)
-        throw new ArgumentException("The question must contain between 1 and 500 characters.", nameof(question));
+    //------------------------------------------------------------------------//
+    //                              PREPARATION                               //
+    //------------------------------------------------------------------------//
 
-    // Expected project IDs let us check whether each context includes the project needed to answer.
+    // 1. Reject an unusable question before loading inputs or making model requests.
+    ComparisonInputsValidator.ValidateQuestion(questionString);
+
+    // 2. Expected project IDs let us check whether each context includes the project needed to answer.
     ComparisonInputs comparisonInputs = await ComparisonInputsLoader
-        .LoadComparisonInputsAsync(question, sourceFile);
+        .LoadComparisonInputsAsync(questionString, sourceFileString);
 
-    // Prepare and size-check both prompts before sending the first request.
+    // 3. Prepare and size-check both prompts before sending the first request.
     List<PreparedContext> preparedContexts =
         ContextCreator.CreateContextStrategies(comparisonInputs);
 
-    OutputPrinter.PrintIntroduction(question, sourceFile);
+    // 4. Explain what changes and what stays fixed.
+    OutputPrinter.PrintIntroduction(questionString, sourceFileString);
 
-    // Change only the supplied context while keeping the question and settings fixed.
+    //------------------------------------------------------------------------//
+    //                               COMPARISON                               //
+    //------------------------------------------------------------------------//
+
+    // 1. Change only the supplied context while keeping the question and settings fixed.
     ComparisonReport comparisonReport = await ContextComparer.
-        CompareContextAsync(sourceFile,comparisonInputs, preparedContexts);
+        CompareContextAsync(sourceFileString, comparisonInputs, preparedContexts);
 
-    // Show each answer with its prompt size, request time, and any failed evidence checks.
-    OutputPrinter.PrintResults(comparisonReport);
+    //------------------------------------------------------------------------//
+    //                          RESULTS AND TAKEAWAY                          //
+    //------------------------------------------------------------------------//
+
+    // 1. Show each answer with its prompt size, request time, and any failed evidence checks.
+    OutputPrinter.PrintResults(comparisonReport, comparisonInputs.ProjectSections);
     OutputPrinter.PrintTakeaway();
 
-    return comparisonReport.Results.All(result => result.EvidenceFlags.Count == 0) ? 0 : 1;
+    return comparisonReport.ContextResults.All(contextResult => contextResult.EvidenceFlagStrings.Count == 0) ? 0 : 1;
 }
 catch (OperationCanceledException)
 {
     Console.Error.WriteLine("The request was canceled or exceeded the 120-second time limit.");
     return 1;
 }
-catch (Exception error)
+catch (Exception errorException)
 {
-    Console.Error.WriteLine(error.Message);
+    Console.Error.WriteLine(errorException.Message);
     return 1;
 }

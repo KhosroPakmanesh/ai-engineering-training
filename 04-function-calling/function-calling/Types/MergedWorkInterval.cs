@@ -1,2 +1,5 @@
-// EndDate is exclusive: a job ending on April 1 covers time up to that day's start.
-public sealed record MergedWorkInterval(DateOnly StartDate, DateOnly EndDate);
+using System.Text.Json.Serialization;
+
+// A merged interval represents covered dates without counting overlapping jobs twice.
+public sealed record MergedWorkInterval([property: JsonPropertyName("startDate")] DateOnly StartDateOnly,
+    [property: JsonPropertyName("endDate")] DateOnly EndDateOnly);

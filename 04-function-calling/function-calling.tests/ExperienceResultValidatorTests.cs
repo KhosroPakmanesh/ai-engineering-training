@@ -8,10 +8,16 @@ public class ExperienceResultValidatorTests
     [InlineData("42 full calendar months [CalculateExperience.totalMonths].", false)]
     [InlineData("36 full calendar months.", false)]
     [InlineData("36 full calendar months [CalculateExperience.totalMonths]. Another 5 years.", false)]
-    public void Final_answers_must_match_the_executed_result(string answer, bool expectedValid)
+    public void Final_answers_must_match_the_executed_result(string answerString, bool expectedValidBool)
     {
-        ExperienceResult result = new(36, 3, []);
-        if (expectedValid) ExperienceResultValidator.ValidateAnswer(answer, result);
-        else Assert.Throws<InvalidDataException>(() => ExperienceResultValidator.ValidateAnswer(answer, result));
+        ExperienceResult experienceResult = new(36, 3, []);
+        if (expectedValidBool)
+        {
+            ExperienceResultValidator.ValidateAnswer(answerString, experienceResult);
+        }
+        else
+        {
+            Assert.Throws<InvalidDataException>(() => ExperienceResultValidator.ValidateAnswer(answerString, experienceResult));
+        }
     }
 }

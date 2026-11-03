@@ -3,53 +3,66 @@ using System.Globalization;
 public static class ExperienceCalculator
 {
     // Count covered calendar months after merging jobs, so concurrent work counts only once.
-    public static ExperienceResult CalculateExperience(List<WorkInterval> intervals, string? evaluationDate)
+    public static ExperienceResult CalculateExperience(List<WorkInterval> workIntervals, string? evaluationDateString)
     {
-        List<MergedWorkInterval> sortedIntervals = intervals.Select(interval => new MergedWorkInterval(
-            ReadDate(interval.StartDate, "startDate"), ReadDate(interval.EndDate ?? evaluationDate, "endDate")))
-            .OrderBy(interval => interval.StartDate).ThenBy(interval => interval.EndDate).ToList();
-        List<MergedWorkInterval> mergedIntervals = MergeIntervals(sortedIntervals);
+        List<MergedWorkInterval> sortedMergedWorkIntervals = workIntervals.Select(workInterval => new MergedWorkInterval(
+            ReadDate(workInterval.StartDateString, "startDate"), ReadDate(workInterval.EndDateString ?? evaluationDateString, "endDate")))
+            .OrderBy(mergedWorkInterval => mergedWorkInterval.StartDateOnly).ThenBy(mergedWorkInterval => mergedWorkInterval.EndDateOnly).ToList();
+        List<MergedWorkInterval> mergedWorkIntervals = MergeIntervals(sortedMergedWorkIntervals);
 
-        int totalMonths = 0;
-        foreach (MergedWorkInterval interval in mergedIntervals)
+        int totalMonthsInt = 0;
+        foreach (MergedWorkInterval mergedWorkInterval in mergedWorkIntervals)
         {
             // A partial first month is excluded. The exclusive end must reach the next month's first day.
-            int firstMonth = interval.StartDate.Year * 12 + interval.StartDate.Month - 1;
-            if (interval.StartDate.Day != 1) firstMonth++;
-            int endMonth = interval.EndDate.Year * 12 + interval.EndDate.Month - 1;
-            totalMonths += Math.Max(0, endMonth - firstMonth);
+            int firstMonthInt = mergedWorkInterval.StartDateOnly.Year * 12 + mergedWorkInterval.StartDateOnly.Month - 1;
+            if (mergedWorkInterval.StartDateOnly.Day != 1)
+            {
+                firstMonthInt++;
+            }
+
+            int endMonthInt = mergedWorkInterval.EndDateOnly.Year * 12 + mergedWorkInterval.EndDateOnly.Month - 1;
+            totalMonthsInt += Math.Max(0, endMonthInt - firstMonthInt);
         }
 
-        return new(TotalMonths: totalMonths, InputIntervalCount: intervals.Count, MergedIntervals: mergedIntervals);
+        return new(TotalMonthsInt: totalMonthsInt, InputIntervalCount: workIntervals.Count, MergedWorkIntervals: mergedWorkIntervals);
     }
 
     // Joining touching jobs also preserves a full month split between two consecutive roles.
-    public static List<MergedWorkInterval> MergeIntervals(List<MergedWorkInterval> sortedIntervals)
+    public static List<MergedWorkInterval> MergeIntervals(List<MergedWorkInterval> sortedMergedWorkIntervals)
     {
-        var mergedIntervals = new List<MergedWorkInterval>();
-        MergedWorkInterval current = sortedIntervals[0];
-        foreach (MergedWorkInterval next in sortedIntervals.Skip(1))
+        var mergedWorkIntervals = new List<MergedWorkInterval>();
+        MergedWorkInterval currentMergedWorkInterval = sortedMergedWorkIntervals[0];
+        foreach (MergedWorkInterval nextMergedWorkInterval in sortedMergedWorkIntervals.Skip(1))
         {
-            if (next.StartDate <= current.EndDate)
+            if (nextMergedWorkInterval.StartDateOnly <= currentMergedWorkInterval.EndDateOnly)
             {
-                if (next.EndDate > current.EndDate) current = current with { EndDate = next.EndDate };
+                if (nextMergedWorkInterval.EndDateOnly > currentMergedWorkInterval.EndDateOnly)
+                {
+                    currentMergedWorkInterval = currentMergedWorkInterval with
+                    {
+                        EndDateOnly = nextMergedWorkInterval.EndDateOnly
+                    };
+                }
             }
             else
             {
-                mergedIntervals.Add(current);
-                current = next;
+                mergedWorkIntervals.Add(currentMergedWorkInterval);
+                currentMergedWorkInterval = nextMergedWorkInterval;
             }
         }
-        mergedIntervals.Add(current);
-        return mergedIntervals;
+        mergedWorkIntervals.Add(currentMergedWorkInterval);
+        return mergedWorkIntervals;
     }
 
     // Exact ISO dates avoid inventing a day from a year, a month, or an ambiguous date.
-    public static DateOnly ReadDate(string? date, string fieldName)
+    public static DateOnly ReadDate(string? dateString, string fieldNameString)
     {
-        if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-            DateTimeStyles.None, out DateOnly parsedDate))
-            throw new InvalidDataException($"{fieldName} must be a valid yyyy-MM-dd date.");
-        return parsedDate;
+        if (!DateOnly.TryParseExact(dateString, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None,
+            out DateOnly parsedDateOnly))
+        {
+            throw new InvalidDataException($"{fieldNameString} must be a valid yyyy-MM-dd date.");
+        }
+
+        return parsedDateOnly;
     }
 }

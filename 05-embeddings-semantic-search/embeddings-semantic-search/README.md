@@ -51,7 +51,7 @@ flowchart TD
     E -->|No| X["AlternativeProgram.cs<br/>Print the error and exit 1"]
 ```
 
-SearchInputsValidator.cs accepts a nonempty query of up to 500 characters, a positive top-k, and 1-100 projects. Every project needs a unique ID, text of up to 4,000 characters, and demonstrated skill names. These limits bound input size; they do not estimate an exact price. Independent project errors are reported together with field paths. Missing files or invalid JSON stop loading immediately.
+SearchInputsValidator.cs accepts a nonempty query of up to 500 characters, a positive top-k, and 1-100 projects. Every project needs a unique ID, text of up to 4,000 characters, and demonstrated skill names. These limits bound input size; they do not estimate an exact price. Validate reads as a checklist: ValidateQuery, ValidateTopK, then ValidateProjects. Independent project errors are reported together with field paths. Missing files or invalid JSON stop loading immediately.
 
 ProjectEmbedder.RequestAsync calls `IEmbeddingGenerator<string, Embedding<float>>.GenerateAsync` and returns Microsoft's `GeneratedEmbeddings<Embedding<float>>` result directly. This common interface serves the same role for embeddings that IChatClient serves for chat. Each result contains embedding vectors, model names, and any reported usage. EmbeddingResponseValidator.cs checks exactly one vector per input, every returned model name, consistent dimensions, finite numbers, and nonzero vectors. The vector size comes from the response. Validation and normalization remain separate visible stages.
 
@@ -125,7 +125,7 @@ The manual and vector-store versions can return the same ranking and scores roun
 
 The final takeaway explains when each method helps: keyword search for exact names, codes, and identifiers, and embedding search for related meanings expressed in different words. It also introduces hybrid search, which combines the two approaches. Hybrid search is a possible next step, not an implemented feature here: this program keeps the two rankings separate.
 
-Provider input token counts are printed when available; missing usage remains `unavailable`. Tokens are the small text pieces counted by the model. A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the same request will be tried again. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results).
+Provider input token counts are printed when available. A missing usage object or a missing count inside one both print `unavailable`. Tokens are the small text pieces counted by the model. A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the same request will be tried again. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results).
 
 The original database has IndexMetadata and Projects tables. Vectors are JSON lists in SQLite text columns. Program.cs loads and scores every row in C#; SQLite provides persistence rather than vector indexing. AlternativeProgram.cs also uploads those vectors to the connector's database and searches there. Its printed database path points to `project-vectors.sqlite`, where the connector maintains data and vector tables. Use the printed full path to inspect the file in a SQLite viewer. The code checks integrity and ranking mechanics. Relevance and evidence remain manual judgments; fake-vector tests do not evaluate a remote model's search quality.
 
@@ -133,8 +133,8 @@ The original database has IndexMetadata and Projects tables. Vectors are JSON li
 
 1. Read [SampleData/projects.json](SampleData/projects.json). Predict where P01, P06, and P11 should rank for the default query, using their descriptions as evidence.
 2. Run the comparison. Inspect the original descriptions behind both lists. Check whether the proofreading project ranks highly and which results describe actual deployment work.
-3. Change `query` at the top of Program.cs to `deploying web services as Docker images`. Run again and inspect the changed keyword matches. Each run makes another two embedding calls, with up to six HTTP attempts.
-4. Change `topK` to 3, or edit one fictional description, then run again. Inspect the new ranking and stored text. Replacing the complete index prevents old versions from remaining as extra rows.
+3. Change `queryString` at the top of Program.cs to `deploying web services as Docker images`. Run again and inspect the changed keyword matches. Each run makes another two embedding calls, with up to six HTTP attempts.
+4. Change `topKInt` to 3, or edit one fictional description, then run again. Inspect the new ranking and stored text. Replacing the complete index prevents old versions from remaining as extra rows.
 
 ## Files to read
 
@@ -156,6 +156,7 @@ Types/ProjectDescription.cs                     Fictional source record
 Types/IndexedProject.cs                         Original project paired with its normalized vector
 Types/SearchIndex.cs                            Stored provider, model, dimensions, and indexed projects
 Types/SearchResult.cs                           Rank, document ID, score, and source snippet
+Types/VectorProject.cs                          Connector key, source text, model metadata, and vector
 SampleData/projects.json                        Twelve fictional project descriptions
 embeddings-semantic-search.csproj                .NET 10 application, SQLite connector, and entry-point selection
 ../../shared/shared/SettingsReader.cs           Selected-provider embedding settings

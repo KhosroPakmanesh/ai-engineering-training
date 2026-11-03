@@ -7,9 +7,9 @@ public class VectorNormalizerTests
     public void Normalization_changes_length_without_changing_direction()
     {
         VectorValidator.Validate([3, 4], 2);
-        List<float> normalizedVector = VectorNormalizer.Normalize([3, 4]);
+        List<float> normalizedVectorFloats = VectorNormalizer.Normalize([3, 4]);
 
-        Assert.Equal(0.6f, normalizedVector[0], 6);
-        Assert.Equal(0.8f, normalizedVector[1], 6);
+        Assert.Equal(0.6f, normalizedVectorFloats[0], 6);
+        Assert.Equal(0.8f, normalizedVectorFloats[1], 6);
     }
 }

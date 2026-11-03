@@ -4,16 +4,16 @@ using Microsoft.Data.Sqlite;
 public static class SqliteSearchIndex
 {
     // Replace documents and metadata together; a failed replacement keeps the previous complete index.
-    public static void Replace(string path, SearchIndex searchIndex)
+    public static void Replace(string pathString, SearchIndex searchIndex)
     {
-        using var connection = new SqliteConnection(
-            new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+        using var sqliteConnection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = pathString, Pooling = false }.ToString());
 
-        connection.Open();
-        using SqliteTransaction transaction = connection.BeginTransaction();
-        using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
+        sqliteConnection.Open();
+        using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
+        using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+        sqliteCommand.Transaction = sqliteTransaction;
+        sqliteCommand.CommandText = """
             CREATE TABLE IF NOT EXISTS IndexMetadata (
                 Id INTEGER PRIMARY KEY CHECK (Id = 1), Provider TEXT NOT NULL,
                 Model TEXT NOT NULL, Dimensions INTEGER NOT NULL CHECK (Dimensions > 0));
@@ -24,73 +24,77 @@ public static class SqliteSearchIndex
             DELETE FROM IndexMetadata;
             INSERT INTO IndexMetadata VALUES (1, $provider, $model, $dimensions);
             """;
-        command.Parameters.AddWithValue("$provider", searchIndex.Provider);
-        command.Parameters.AddWithValue("$model", searchIndex.Model);
-        command.Parameters.AddWithValue("$dimensions", searchIndex.Dimensions);
-        command.ExecuteNonQuery();
+        sqliteCommand.Parameters.AddWithValue("$provider", searchIndex.ProviderString);
+        sqliteCommand.Parameters.AddWithValue("$model", searchIndex.ModelString);
+        sqliteCommand.Parameters.AddWithValue("$dimensions", searchIndex.DimensionsInt);
+        sqliteCommand.ExecuteNonQuery();
 
-        for (int position = 0; position < searchIndex.Projects.Count; position++)
+        for (int positionInt = 0; positionInt < searchIndex.IndexedProjects.Count; positionInt++)
         {
-            IndexedProject indexedProject = searchIndex.Projects[position];
-            using SqliteCommand insert = connection.CreateCommand();
-            insert.Transaction = transaction;
-            insert.CommandText = "INSERT INTO Projects VALUES ($id, $position, $text, $skills, $vector);";
-            insert.Parameters.AddWithValue("$id", indexedProject.Project.Id);
-            insert.Parameters.AddWithValue("$position", position);
-            insert.Parameters.AddWithValue("$text", indexedProject.Project.Text);
-            insert.Parameters.AddWithValue("$skills", JsonSerializer.Serialize(indexedProject.Project.Skills));
-            insert.Parameters.AddWithValue("$vector", JsonSerializer.Serialize(indexedProject.Vector));
-            insert.ExecuteNonQuery();
+            IndexedProject indexedProject = searchIndex.IndexedProjects[positionInt];
+            using SqliteCommand insertSqliteCommand = sqliteConnection.CreateCommand();
+            insertSqliteCommand.Transaction = sqliteTransaction;
+            insertSqliteCommand.CommandText = "INSERT INTO Projects VALUES ($id, $position, $text, $skills, $vector);";
+            insertSqliteCommand.Parameters.AddWithValue("$id", indexedProject.ProjectDescription.IdString);
+            insertSqliteCommand.Parameters.AddWithValue("$position", positionInt);
+            insertSqliteCommand.Parameters.AddWithValue("$text", indexedProject.ProjectDescription.TextString);
+            insertSqliteCommand.Parameters.AddWithValue("$skills", JsonSerializer.Serialize(indexedProject.ProjectDescription.SkillStrings));
+            insertSqliteCommand.Parameters.AddWithValue("$vector", JsonSerializer.Serialize(indexedProject.VectorFloats));
+            insertSqliteCommand.ExecuteNonQuery();
         }
 
-        transaction.Commit();
+        sqliteTransaction.Commit();
     }
 
     // Read a consistent snapshot in source order; validation is a separate visible stage for the caller.
-    public static SearchIndex Read(string path)
+    public static SearchIndex Read(string pathString)
     {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        using var sqliteConnection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
-            DataSource = path,
+            DataSource = pathString,
             Mode = SqliteOpenMode.ReadOnly,
             Pooling = false
         }.ToString());
 
-        connection.Open();
-        using SqliteTransaction transaction = connection.BeginTransaction(deferred: true);
-        using SqliteCommand metadata = connection.CreateCommand();
-        metadata.Transaction = transaction;
-        metadata.CommandText = "SELECT Provider, Model, Dimensions FROM IndexMetadata WHERE Id = 1;";
-        string provider;
-        string model;
-        int dimensions;
-        using (SqliteDataReader reader = metadata.ExecuteReader())
+        sqliteConnection.Open();
+        using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction(deferred: true);
+        using SqliteCommand metadataSqliteCommand = sqliteConnection.CreateCommand();
+        metadataSqliteCommand.Transaction = sqliteTransaction;
+        metadataSqliteCommand.CommandText = "SELECT Provider, Model, Dimensions FROM IndexMetadata WHERE Id = 1;";
+        string providerString;
+        string modelString;
+        int dimensionsInt;
+        using (SqliteDataReader sqliteDataReader = metadataSqliteCommand.ExecuteReader())
         {
-            if (!reader.Read()) throw new InvalidDataException("The SQLite index has no model metadata.");
-            provider = reader.GetString(0);
-            model = reader.GetString(1);
-            dimensions = reader.GetInt32(2);
+            if (!sqliteDataReader.Read())
+            {
+                throw new InvalidDataException("The SQLite index has no model metadata.");
+            }
+
+            providerString = sqliteDataReader.GetString(0);
+            modelString = sqliteDataReader.GetString(1);
+            dimensionsInt = sqliteDataReader.GetInt32(2);
         }
 
-        using SqliteCommand documents = connection.CreateCommand();
-        documents.Transaction = transaction;
-        documents.CommandText = "SELECT Id, SourceText, Skills, Vector FROM Projects ORDER BY Position;";
-        var projects = new List<IndexedProject>();
+        using SqliteCommand documentsSqliteCommand = sqliteConnection.CreateCommand();
+        documentsSqliteCommand.Transaction = sqliteTransaction;
+        documentsSqliteCommand.CommandText = "SELECT Id, SourceText, Skills, Vector FROM Projects ORDER BY Position;";
+        var indexedProjects = new List<IndexedProject>();
 
-        using (SqliteDataReader reader = documents.ExecuteReader())
+        using (SqliteDataReader sqliteDataReader = documentsSqliteCommand.ExecuteReader())
         {
-            while (reader.Read())
+            while (sqliteDataReader.Read())
             {
-                List<string> skills = JsonSerializer.Deserialize<List<string>>(reader.GetString(2))
+                List<string> skillStrings = JsonSerializer.Deserialize<List<string>>(sqliteDataReader.GetString(2))
                     ?? throw new InvalidDataException("An indexed project's skills must be a JSON list.");
-                List<float> vector = JsonSerializer.Deserialize<List<float>>(reader.GetString(3))
+                List<float> vectorFloats = JsonSerializer.Deserialize<List<float>>(sqliteDataReader.GetString(3))
                     ?? throw new InvalidDataException("An indexed project's vector must be a JSON list.");
-                projects.Add(new(new(reader.GetString(0), reader.GetString(1), skills), vector));
+                indexedProjects.Add(new(new(sqliteDataReader.GetString(0), sqliteDataReader.GetString(1), skillStrings), vectorFloats));
             }
         }
 
-        transaction.Commit();
+        sqliteTransaction.Commit();
 
-        return new(provider, model, dimensions, projects);
+        return new(providerString, modelString, dimensionsInt, indexedProjects);
     }
 }

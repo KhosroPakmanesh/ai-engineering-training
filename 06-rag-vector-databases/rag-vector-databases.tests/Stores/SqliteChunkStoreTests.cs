@@ -25,9 +25,16 @@ public class SqliteChunkStoreTests
             Assert.Equal("project-a.md#chunk-01", rankedRetrievedChunks[0].DocumentChunk.ChunkIdString);
             Assert.Equal(1, rankedRetrievedChunks[0].ScoreDouble);
             chunkIndex.IndexedChunks.RemoveAt(1);
-            chunkIndex.IndexedChunks[0] = chunkIndex.IndexedChunks[0] with { DocumentChunk = chunkIndex.IndexedChunks[0].DocumentChunk with { TextString = "Updated Docker work." } };
+            chunkIndex.IndexedChunks[0] = chunkIndex.IndexedChunks[0] with
+            {
+                DocumentChunk = chunkIndex.IndexedChunks[0].DocumentChunk with
+                {
+                    TextString = "Updated Docker work."
+                }
+            };
             await selectedIChunkStore.SynchronizeAsync(chunkIndex);
-            Assert.Equal("Updated Docker work.", Assert.Single((await selectedIChunkStore.ReadAsync())!.IndexedChunks).DocumentChunk.TextString);
+            Assert.Equal("Updated Docker work.",
+                Assert.Single((await selectedIChunkStore.ReadAsync())!.IndexedChunks).DocumentChunk.TextString);
         }
         finally { File.Delete(pathString); }
     }
@@ -47,7 +54,10 @@ public class SqliteChunkStoreTests
         try
         {
             using (var sqliteConnection = new SqliteConnection(new SqliteConnectionStringBuilder
-                { DataSource = pathString, Pooling = false }.ToString()))
+            {
+                DataSource = pathString,
+                Pooling = false
+            }.ToString()))
             {
                 await sqliteConnection.OpenAsync();
                 using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();

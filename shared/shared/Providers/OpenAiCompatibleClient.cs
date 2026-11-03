@@ -9,70 +9,79 @@ using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 internal static class OpenAiCompatibleClient
 {
     // Both current providers use the same SDK transport, retries, and Chat Completions format.
-    public static IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient,
-        Action<ChatCompletionOptions>? configureOptions = null)
+    public static IChatClient CreateClient(ProviderSettings providerSettings, HttpClient? httpClient,
+        Action<ChatCompletionOptions>? configureOptionsAction = null)
     {
-        var client = new ChatClient(settings.Model, new ApiKeyCredential(settings.Key), CreateOptions(settings, httpClient));
-        return new CompatibleChatClient(client.AsIChatClient(), configureOptions);
+        var chatClient = new ChatClient(providerSettings.ModelString, new ApiKeyCredential(providerSettings.KeyString),
+            CreateOptions(providerSettings, httpClient));
+        return new CompatibleChatClient(chatClient.AsIChatClient(), configureOptionsAction);
     }
 
     // Check and order wire indexes before Microsoft's adapter converts the response into common embedding values.
-    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings settings, HttpClient? httpClient,
-        PipelinePolicy? responsePolicy = null)
+    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings providerSettings,
+        HttpClient? httpClient, PipelinePolicy? responsePolicyPipelinePolicy = null)
     {
-        OpenAIClientOptions options = CreateOptions(settings, httpClient);
-        options.AddPolicy(new EmbeddingResponseOrderPolicy(), PipelinePosition.BeforeTransport);
+        OpenAIClientOptions openAIClientOptions = CreateOptions(providerSettings, httpClient);
+        openAIClientOptions.AddPolicy(new EmbeddingResponseOrderPolicy(), PipelinePosition.BeforeTransport);
         // Response policies run in reverse order, so provider conventions are handled before index checks.
-        if (responsePolicy is not null) options.AddPolicy(responsePolicy, PipelinePosition.BeforeTransport);
-        var client = new EmbeddingClient(settings.Model, new ApiKeyCredential(settings.Key), options);
-        return client.AsIEmbeddingGenerator();
+        if (responsePolicyPipelinePolicy is not null)
+        {
+            openAIClientOptions.AddPolicy(responsePolicyPipelinePolicy, PipelinePosition.BeforeTransport);
+        }
+
+        var embeddingClient = new EmbeddingClient(providerSettings.ModelString, new ApiKeyCredential(providerSettings.KeyString),
+            openAIClientOptions);
+        return embeddingClient.AsIEmbeddingGenerator();
     }
 
     // Chat and embeddings have the same transport, retry limit, and network timeout.
-    private static OpenAIClientOptions CreateOptions(ProviderSettings settings, HttpClient? httpClient)
+    private static OpenAIClientOptions CreateOptions(ProviderSettings providerSettings, HttpClient? httpClient)
     {
-        OpenAIClientOptions clientOptions = new()
+        OpenAIClientOptions openAIClientOptions = new()
         {
-            Endpoint = settings.Endpoint,
+            Endpoint = providerSettings.EndpointUri,
             RetryPolicy = new AiRetryPolicy(),
             NetworkTimeout = TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds)
         };
         if (httpClient is not null)
-            clientOptions.Transport = new HttpClientPipelineTransport(httpClient);
+        {
+            openAIClientOptions.Transport = new HttpClientPipelineTransport(httpClient);
+        }
 
-        return clientOptions;
+        return openAIClientOptions;
     }
 
     // Keep shared wire-format handling beneath the framework's function loop.
-    private sealed class CompatibleChatClient(IChatClient innerClient,
-        Action<ChatCompletionOptions>? configureOptions) : DelegatingChatClient(innerClient)
+    private sealed class CompatibleChatClient(IChatClient innerIChatClient, Action<ChatCompletionOptions>? configureOptionsAction) : DelegatingChatClient(innerIChatClient)
     {
         // Each model turn gets fresh SDK options without changing the lesson's ChatOptions.
-        public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
-            ChatOptions? options = null, CancellationToken cancellationToken = default)
+        public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messagesChatMessages,
+            ChatOptions? chatOptions = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ChatOptions? requestOptions = options;
-            if (options is not null && (options.ResponseFormat is ChatResponseFormatJson || options.Tools?.Count > 0))
+            ChatOptions? requestChatOptions = chatOptions;
+            if (chatOptions is not null && (chatOptions.ResponseFormat is ChatResponseFormatJson || chatOptions.Tools?.Count > 0))
             {
-                requestOptions = options.Clone();
-                requestOptions.RawRepresentationFactory = client =>
+                requestChatOptions = chatOptions.Clone();
+                requestChatOptions.RawRepresentationFactory = iChatClient =>
                 {
-                    var rawOptions = options.RawRepresentationFactory?.Invoke(client) as ChatCompletionOptions
+                    var rawChatCompletionOptions = chatOptions.RawRepresentationFactory?.Invoke(iChatClient) as ChatCompletionOptions
                         ?? new ChatCompletionOptions();
-                    configureOptions?.Invoke(rawOptions);
-                    return rawOptions;
+                    configureOptionsAction?.Invoke(rawChatCompletionOptions);
+                    return rawChatCompletionOptions;
                 };
             }
 
-            ChatResponse response = await base.GetResponseAsync(messages, requestOptions, cancellationToken);
+            ChatResponse chatResponse = await base.GetResponseAsync(messagesChatMessages, requestChatOptions, cancellationToken);
             // Both direct Gemini and Gemini behind OpenRouter can return opaque tool metadata.
-            if (response.RawRepresentation is ChatCompletion completion && completion.ToolCalls.Count > 0)
+            if (chatResponse.RawRepresentation is ChatCompletion chatCompletion && chatCompletion.ToolCalls.Count > 0)
             {
-                foreach (ChatMessage message in response.Messages.Where(message => message.Role == ChatRole.Assistant))
-                    message.RawRepresentation = new AssistantChatMessage(completion);
+                foreach (ChatMessage chatMessage in chatResponse.Messages.Where(chatMessage => chatMessage.Role == ChatRole.Assistant))
+                {
+                    chatMessage.RawRepresentation = new AssistantChatMessage(chatCompletion);
+                }
             }
-            return response;
+            return chatResponse;
         }
     }
 }

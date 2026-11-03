@@ -1,2 +1,5 @@
-// EndDate is exclusive: a job ending on April 1 covers time up to that day's start.
-public sealed record ExperienceResult(int TotalMonths, int InputIntervalCount, List<MergedWorkInterval> MergedIntervals);
+using System.Text.Json.Serialization;
+
+// The calculator returns full months, input count, and merged coverage intervals.
+public sealed record ExperienceResult([property: JsonPropertyName("totalMonths")] int TotalMonthsInt, int InputIntervalCount,
+    [property: JsonPropertyName("mergedIntervals")] List<MergedWorkInterval> MergedWorkIntervals);

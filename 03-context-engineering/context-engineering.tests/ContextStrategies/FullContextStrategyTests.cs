@@ -6,12 +6,12 @@ public class FullContextStrategyTests
     [Fact]
     public void Context_is_accepted_at_the_cap_and_rejected_above_it()
     {
-        List<ProjectSection> sections = ContextTestData.ReadSections();
-        ContextStrategy context = FullContextStrategy.Prepare(sections);
-        ContextStrategy atCap = FullContextStrategy.Prepare(sections, context.Text.Length);
+        List<ProjectSection> projectSections = ContextTestData.ReadSections();
+        ContextStrategy contextStrategy = FullContextStrategy.Prepare(projectSections);
+        ContextStrategy atCapContextStrategy = FullContextStrategy.Prepare(projectSections, contextStrategy.TextString.Length);
 
-        Assert.Equal(context.Text, atCap.Text);
+        Assert.Equal(contextStrategy.TextString, atCapContextStrategy.TextString);
         Assert.Throws<InvalidDataException>(() =>
-            FullContextStrategy.Prepare(sections, context.Text.Length - 1));
+            FullContextStrategy.Prepare(projectSections, contextStrategy.TextString.Length - 1));
     }
 }

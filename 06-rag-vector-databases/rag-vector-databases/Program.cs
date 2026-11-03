@@ -34,23 +34,23 @@ try
     List<string> questionTextStrings = ragQuestions.Select(ragQuestion => ragQuestion.TextString).ToList();
 
     // 3. Check both model settings and existing index compatibility before requesting embeddings.
-    ProviderSettings embeddingProviderSettings = await SettingsReader.ReadSettingsAsync(folderString, useEmbeddingModel: true);
+    ProviderSettings embeddingProviderSettings = await SettingsReader.ReadSettingsAsync(folderString, useEmbeddingModelBool: true);
     ProviderSettings chatProviderSettings = await SettingsReader.ReadSettingsAsync(folderString);
     using IChunkStore selectedIChunkStore = ChunkStoreFactory.Create(selectedStoreBackend, folderString);
     ChunkIndex? previousChunkIndex = await selectedIChunkStore.ReadAsync();
     if (previousChunkIndex is not null)
     {
         IndexValidator.Validate(previousChunkIndex);
-        IndexValidator.ValidateCompatibility(previousChunkIndex, embeddingProviderSettings.Name,
-            embeddingProviderSettings.Model, chunkSizeInt, overlapInt);
+        IndexValidator.ValidateCompatibility(previousChunkIndex, embeddingProviderSettings.NameString,
+            embeddingProviderSettings.ModelString, chunkSizeInt, overlapInt);
     }
 
     // 4. Identify passages that need new vectors and explain the model-call plan.
     List<DocumentChunk> changedDocumentChunks = IndexPreparer.FindChanged(documentChunks, previousChunkIndex);
     List<string> documentTextStrings = changedDocumentChunks
         .Select(documentChunk => documentChunk.HeadingString + "\n" + documentChunk.TextString).ToList();
-    OutputPrinter.PrintIntroduction(embeddingProviderSettings, chatProviderSettings, selectedIChunkStore.DescriptionString,
-        sourceDocuments, ragQuestions, documentChunks.Count, changedDocumentChunks.Count, topKInt, minimumScoreDouble);
+    OutputPrinter.PrintIntroduction(embeddingProviderSettings, chatProviderSettings, selectedIChunkStore.DescriptionString, sourceDocuments,
+        ragQuestions, documentChunks.Count, changedDocumentChunks.Count, topKInt, minimumScoreDouble);
 
     //------------------------------------------------------------------------//
     //                           DOCUMENT INDEXING                            //
@@ -65,8 +65,8 @@ try
     {
         GeneratedEmbeddings<Embedding<float>> documentGeneratedEmbeddings =
             await ChunkEmbedder.RequestAsync(iEmbeddingGenerator, documentTextStrings);
-        EmbeddingValidator.Validate(documentGeneratedEmbeddings, changedDocumentChunks.Count,
-            embeddingProviderSettings.Model, previousChunkIndex?.IndexMetadata.DimensionsInt);
+        EmbeddingValidator.Validate(documentGeneratedEmbeddings, changedDocumentChunks.Count, embeddingProviderSettings.ModelString,
+            previousChunkIndex?.IndexMetadata.DimensionsInt);
 
         dimensionsInt = documentGeneratedEmbeddings[0].Dimensions;
         for (int indexInt = 0; indexInt < changedDocumentChunks.Count; indexInt++)
@@ -79,8 +79,9 @@ try
     }
 
     // 2. Merge new and reused vectors, then synchronize the store, including removals.
-    var indexMetadata = new IndexMetadata(ProviderString: embeddingProviderSettings.Name, EmbeddingModelString: embeddingProviderSettings.Model,
-        DimensionsInt: dimensionsInt, ChunkSizeInt: chunkSizeInt, OverlapInt: overlapInt);
+    var indexMetadata = new IndexMetadata(ProviderString: embeddingProviderSettings.NameString,
+        EmbeddingModelString: embeddingProviderSettings.ModelString, DimensionsInt: dimensionsInt, ChunkSizeInt: chunkSizeInt,
+        OverlapInt: overlapInt);
 
     ChunkIndex desiredChunkIndex = IndexPreparer.Merge(indexMetadata, documentChunks, previousChunkIndex, changedIndexedChunks);
     IndexValidator.Validate(desiredChunkIndex);
@@ -90,8 +91,8 @@ try
     ChunkIndex storedChunkIndex = await selectedIChunkStore.ReadAsync()
         ?? throw new InvalidDataException("The store returned no index after ingestion.");
     IndexValidator.Validate(storedChunkIndex);
-    IndexValidator.ValidateCompatibility(storedChunkIndex, embeddingProviderSettings.Name,
-        embeddingProviderSettings.Model, chunkSizeInt, overlapInt);
+    IndexValidator.ValidateCompatibility(storedChunkIndex, embeddingProviderSettings.NameString, embeddingProviderSettings.ModelString,
+        chunkSizeInt, overlapInt);
 
     //------------------------------------------------------------------------//
     //                         RETRIEVAL AND CONTEXT                          //
@@ -100,8 +101,8 @@ try
     // 1. Embed all questions in one batch with the same model and vector size as the documents.
     GeneratedEmbeddings<Embedding<float>> questionGeneratedEmbeddings =
         await ChunkEmbedder.RequestAsync(iEmbeddingGenerator, questionTextStrings);
-    EmbeddingValidator.Validate(questionGeneratedEmbeddings, ragQuestions.Count,
-        embeddingProviderSettings.Model, storedChunkIndex.IndexMetadata.DimensionsInt);
+    EmbeddingValidator.Validate(questionGeneratedEmbeddings, ragQuestions.Count, embeddingProviderSettings.ModelString,
+        storedChunkIndex.IndexMetadata.DimensionsInt);
     OutputPrinter.PrintUsage("Question embeddings", questionGeneratedEmbeddings.Usage);
 
     // 2. Retrieve passages, prepare every bounded context, and print the evidence decisions before chat.
@@ -110,8 +111,8 @@ try
     {
         List<float> vectorFloats = VectorMath.Normalize(questionGeneratedEmbeddings[indexInt].Vector.Span);
         List<RetrievedChunk> candidateRetrievedChunks = await selectedIChunkStore.SearchAsync(vectorFloats, topKInt);
-        PreparedAnswer preparedAnswer = EvidenceSelector.Prepare(ragQuestions[indexInt], candidateRetrievedChunks,
-            minimumScoreDouble, contextLimitInt);
+        PreparedAnswer preparedAnswer = EvidenceSelector.Prepare(ragQuestions[indexInt], candidateRetrievedChunks, minimumScoreDouble,
+            contextLimitInt);
         preparedAnswers.Add(preparedAnswer);
         OutputPrinter.PrintRetrieval(preparedAnswer);
     }
@@ -147,7 +148,9 @@ try
         List<string> citedIdStrings = CitationParser.Parse(answerString);
         CitationValidator.Validate(answerString, citedIdStrings, preparedAnswer.SelectedRetrievedChunks);
         List<Citation> citations = citedIdStrings.Distinct(StringComparer.Ordinal)
-            .Select(idString => new Citation(idString, preparedAnswer.SelectedRetrievedChunks
+            .Select(idString => new Citation(
+                idString,
+                preparedAnswer.SelectedRetrievedChunks
                 .Single(selectedRetrievedChunk => selectedRetrievedChunk.DocumentChunk.ChunkIdString == idString)
                 .DocumentChunk.FilenameString)).ToList();
 
@@ -172,8 +175,10 @@ try
 
     // 1. Save only accepted results. Generated files live in the ignored build output.
     string outputPathString = Path.Combine(folderString, "rag-results.json");
-    await File.WriteAllTextAsync(outputPathString, JsonSerializer.Serialize(ragResults,
-        new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    await File.WriteAllTextAsync(
+        outputPathString,
+        JsonSerializer.Serialize(ragResults,
+            new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
 
     // 2. Show the answers and citation checks, then suggest a concrete input to change.
     OutputPrinter.PrintResults(ragResults, outputPathString);

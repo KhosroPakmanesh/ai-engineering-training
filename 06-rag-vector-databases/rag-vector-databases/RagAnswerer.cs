@@ -20,16 +20,18 @@ public static class RagAnswerer
     public static async Task<AgentResponse> RequestAsync(IChatClient answerIChatClient, PreparedAnswer preparedAnswer,
         CancellationToken cancellationToken = default)
     {
-        ChatClientAgent chatClientAgent = new(answerIChatClient, new ChatClientAgentOptions
-        {
-            Name = "ResumeKnowledgeAssistant",
-            ChatOptions = new ChatOptions
+        ChatClientAgent chatClientAgent = new(
+            answerIChatClient,
+            new ChatClientAgentOptions
             {
-                Instructions = InstructionsString,
-                Temperature = 0.2f,
-                MaxOutputTokens = MaxOutputTokensInt
-            }
-        });
+                Name = "ResumeKnowledgeAssistant",
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = InstructionsString,
+                    Temperature = 0.2f,
+                    MaxOutputTokens = MaxOutputTokensInt
+                }
+            });
 
         using var deadlineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadlineCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));

@@ -3,39 +3,45 @@ using static ConsoleOutput;
 public static class OutputPrinter
 {
     // Separate the model's choice of a tool from the C# calculation it asks the app to perform.
-    public static void PrintIntroduction(ExperienceInputs inputs)
+    public static void PrintIntroduction(ExperienceInputs experienceInputs)
     {
         PrintHeading("Function Calling: let C# calculate the answer");
+        PrintColoredLine($"QUESTION | {experienceInputs.QuestionString}", ConsoleColor.Cyan);
         Console.WriteLine(
-            $"Question: {inputs.Question}\n" +
-            $"Source: SampleData/jobs.json; evaluation date: {inputs.EvaluationDate}\n" +
+            $"Source: SampleData/jobs.json; evaluation date: {experienceInputs.EvaluationDateString}\n" +
             "The first model call selects CalculateExperience with the supplied dates.\n" +
             "C# checks those arguments, merges overlapping or touching jobs, and counts full calendar months.\n" +
             "The second model call receives the tool result and must report its total with the required citation.");
     }
 
     // Distinguish model turns from retries before starting the complete tool conversation.
-    public static void PrintRequestDetails(ProviderSettings settings) =>
+    public static void PrintRequestDetails(ProviderSettings providerSettings)
+    {
         PrintColoredLine(
-            $"Model: {settings.Model}. Sending fictional work dates to {settings.Name} " +
-            $"(up to {ExperienceAssistant.MaxModelCalls} model calls, up to {AiClientFactory.MaxRetries} HTTP retries per call).",
+            $"Model: {providerSettings.ModelString}. Sending fictional work dates to {providerSettings.NameString} " +
+            $"(up to {ExperienceAssistant.MaxModelCallsInt} model calls, up to {AiClientFactory.MaxRetries} HTTP retries per call).",
             ConsoleColor.Gray);
+    }
 
     // Preserve the redacted execution log even when source checks or calculation fail.
-    public static void PrintToolExecution(string toolName, long durationMilliseconds, bool succeeded) =>
-        PrintColoredLine(
-            $"tool_name={toolName} inputs=[redacted] duration_ms={durationMilliseconds} succeeded={succeeded}",
+    public static void PrintToolExecution(string toolNameString, long durationMillisecondsLong, bool succeededBool)
+    {
+        PrintColoredLine($"tool_name={toolNameString} inputs=[redacted] duration_ms={durationMillisecondsLong} succeeded={succeededBool}",
             ConsoleColor.Gray);
+    }
 
     // Call this only after execution and answer checks; the printer does not establish acceptance.
-    public static void PrintResults(ParsedExperienceResponse parsedResponse, long requestMilliseconds)
+    public static void PrintResults(ParsedExperienceResponse parsedExperienceResponse, long requestMillisecondsLong)
     {
-        ExperienceResult result = parsedResponse.Result;
+        ExperienceResult experienceResult = parsedExperienceResponse.ExperienceResult;
         PrintHeading("\nAccepted tool answer");
-        Console.WriteLine($"Input intervals: {result.InputIntervalCount}; merged intervals: {result.MergedIntervals.Count}");
-        Console.WriteLine($"Model calls: {parsedResponse.ModelCallCount}; tool executions: {parsedResponse.ToolExecutionCount}");
-        Console.WriteLine($"Request time: {requestMilliseconds} ms");
-        Console.WriteLine(parsedResponse.Answer);
+        PrintColoredLine("── Answer 1 ───────────────────────────────", ConsoleColor.White);
+        Console.WriteLine($"Input intervals: {experienceResult.InputIntervalCount}; merged intervals: {experienceResult.MergedWorkIntervals.Count}");
+        Console.WriteLine($"Model calls: {parsedExperienceResponse.ModelCallCountInt}; tool executions: {parsedExperienceResponse.ToolExecutionCountInt}");
+        Console.WriteLine($"Request time: {requestMillisecondsLong} ms");
+        Console.WriteLine(parsedExperienceResponse.AnswerString);
+        Console.WriteLine("Accepted citations:");
+        PrintColoredLine("  [CalculateExperience.totalMonths] -> the executed calculator's totalMonths result", ConsoleColor.Cyan);
     }
 
     // Explain the arithmetic's boundary so a matching total is not mistaken for proof of employment.

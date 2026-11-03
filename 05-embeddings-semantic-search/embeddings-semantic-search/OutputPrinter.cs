@@ -4,15 +4,14 @@ using static ConsoleOutput;
 public static class OutputPrinter
 {
     // Keep the setup explanation separate so the embedding request stages stay easy to follow.
-    public static void PrintIntroduction(string query, int projectCount, int topK, ProviderSettings settings)
+    public static void PrintIntroduction(string queryString, int projectCountInt, int topKInt, ProviderSettings providerSettings)
     {
         PrintHeading("Keyword vs. Semantic Search");
-        Console.WriteLine(
-            $"Query: \"{query}\"\n" +
-            $"Search the same {projectCount} project descriptions; show the top {topK} from each method.");
+        PrintColoredLine($"QUERY | \"{queryString}\"", ConsoleColor.Cyan);
+        Console.WriteLine($"Search the same {projectCountInt} project descriptions; show the top {topKInt} from each method.");
         PrintColoredLine(
-            $"Provider: {settings.Name}\n" +
-            $"Embedding model: {settings.Model}",
+            $"Provider: {providerSettings.NameString}\n" +
+            $"Embedding model: {providerSettings.ModelString}",
             ConsoleColor.Gray);
         PrintColoredLine(
             "\nPreparing embeddings: two remote calls, one for all descriptions and one for the query.\n" +
@@ -21,13 +20,11 @@ public static class OutputPrinter
     }
 
     // Explain the two score scales before the learner compares the ranked projects.
-    public static void PrintComparisonGuide(string query)
+    public static void PrintComparisonGuide(string queryString)
     {
         PrintHeading("\nHow to read the comparison");
-        Console.WriteLine($"Both searches use the query: \"{query}\"");
-        PrintColoredLine(
-            "KEYWORD: counts distinct query words found in the description, ignoring case and punctuation.",
-            ConsoleColor.Cyan);
+        Console.WriteLine($"Both searches use the query: \"{queryString}\"");
+        PrintColoredLine("KEYWORD: counts distinct query words found in the description, ignoring case and punctuation.", ConsoleColor.Cyan);
         PrintColoredLine(
             "SEMANTIC: compares the query and description embeddings using cosine similarity.\n" +
             "Embeddings are lists of numbers that represent text; related texts can point in similar directions.",
@@ -45,44 +42,42 @@ public static class OutputPrinter
             "Example query:   experience building containerized APIs\n" +
             "Related wording: built web services packaged as Docker images");
         PrintColoredLine("Keyword search counts shared words.", ConsoleColor.Cyan);
-        PrintColoredLine(
-            "Embedding search can find related meaning despite different wording.",
-            ConsoleColor.DarkYellow);
+        PrintColoredLine("Embedding search can find related meaning despite different wording.", ConsoleColor.DarkYellow);
         Console.WriteLine(
             "\nThis supports RAG (retrieval-augmented generation): finding relevant documents to give an AI\n" +
             "before it answers a question.");
     }
 
     // Explain rank and excerpt limits once before printing the individual results.
-    public static void PrintResultsHeading() =>
+    public static void PrintResultsHeading()
+    {
         Console.WriteLine("\nRESULTS: each method starts at rank 1; excerpts show up to 90 characters.");
+    }
 
     // Use the same method colours in every rank so learners can follow each search easily.
-    public static void PrintRankComparison(SearchResult semantic, SearchResult lexical)
+    public static void PrintRankComparison(SearchResult semanticSearchResult, SearchResult lexicalSearchResult)
     {
-        string semanticLabel = $"{semantic.Rank}. {semantic.DocumentId}: {semantic.Score:F4}";
+        string semanticLabelString = $"{semanticSearchResult.RankInt}. {semanticSearchResult.DocumentIdString}: {semanticSearchResult.ScoreDouble:F4}";
+        PrintColoredLine($"\n── Rank {semanticSearchResult.RankInt} ──────────────────────────", ConsoleColor.White);
         PrintColoredLine(
-            $"\n── Rank {semantic.Rank} ──────────────────────────",
-            ConsoleColor.White);
-        PrintColoredLine(
-            $"KEYWORD  | {lexical.Rank}. {lexical.DocumentId} | query words matched: {lexical.Score:F0}",
+            $"KEYWORD  | {lexicalSearchResult.RankInt}. {lexicalSearchResult.DocumentIdString} | query words matched: {lexicalSearchResult.ScoreDouble:F0}",
             ConsoleColor.Cyan);
-        Console.WriteLine($"  Excerpt: {lexical.Snippet}");
-        PrintColoredLine($"SEMANTIC | {semanticLabel} (cosine similarity)", ConsoleColor.DarkYellow);
-        Console.WriteLine($"  Excerpt: {semantic.Snippet}");
+        Console.WriteLine($"  Excerpt: {lexicalSearchResult.SnippetString}");
+        PrintColoredLine($"SEMANTIC | {semanticLabelString} (cosine similarity)", ConsoleColor.DarkYellow);
+        Console.WriteLine($"  Excerpt: {semanticSearchResult.SnippetString}");
     }
 
     // Keep storage and usage details together, after the comparison they describe.
-    public static void PrintIndexDetails(
-        SearchIndex storedIndex, string indexPath, UsageDetails? documentUsage, UsageDetails? queryUsage)
+    public static void PrintIndexDetails(SearchIndex storedSearchIndex, string indexPathString, UsageDetails? documentUsageDetails,
+        UsageDetails? queryUsageDetails)
     {
         PrintHeading("\nIndex and request details");
         PrintColoredLine(
-            $"Indexed projects: {storedIndex.Projects.Count}; numbers per embedding: {storedIndex.Dimensions}\n" +
-            $"SQLite index: {indexPath}\n" +
+            $"Indexed projects: {storedSearchIndex.IndexedProjects.Count}; numbers per embedding: {storedSearchIndex.DimensionsInt}\n" +
+            $"SQLite index: {indexPathString}\n" +
             "Provider input tokens: documents=" +
-            $"{documentUsage?.InputTokenCount.ToString() ?? "unavailable"}, " +
-            $"query={queryUsage?.InputTokenCount.ToString() ?? "unavailable"}",
+            $"{documentUsageDetails?.InputTokenCount?.ToString() ?? "unavailable"}, " +
+            $"query={queryUsageDetails?.InputTokenCount?.ToString() ?? "unavailable"}",
             ConsoleColor.Gray);
     }
 

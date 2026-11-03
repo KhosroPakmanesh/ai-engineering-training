@@ -4,20 +4,26 @@ using Microsoft.Extensions.AI;
 public static class ToolExecutionValidator
 {
     // Only a successful framework function result proves that the calculator really ran.
-    public static void ValidateToolExecution(AgentResponse response)
+    public static void ValidateToolExecution(AgentResponse agentResponse)
     {
-        List<FunctionResultContent> results = response.Messages.SelectMany(message => message.Contents)
+        List<FunctionResultContent> functionResultContents = agentResponse.Messages.SelectMany(chatMessage => chatMessage.Contents)
             .OfType<FunctionResultContent>().ToList();
-        if (results.Count == 0)
+        if (functionResultContents.Count == 0)
+        {
             throw new InvalidDataException("The model did not execute CalculateExperience. No experience total was accepted.");
-        if (results.Count != 1)
-            throw new InvalidDataException("Expected exactly one CalculateExperience execution.");
+        }
 
-        FunctionResultContent result = results[0];
-        List<FunctionCallContent> calls = response.Messages.SelectMany(message => message.Contents)
-            .OfType<FunctionCallContent>().Where(call => call.CallId == result.CallId).ToList();
-        if (calls.Count != 1 || calls[0].Name != ExperienceAssistant.ToolName || result.Exception is not null)
+        if (functionResultContents.Count != 1)
+        {
+            throw new InvalidDataException("Expected exactly one CalculateExperience execution.");
+        }
+
+        FunctionResultContent resultFunctionResultContent = functionResultContents[0];
+        List<FunctionCallContent> callsFunctionCallContents = agentResponse.Messages.SelectMany(chatMessage => chatMessage.Contents)
+            .OfType<FunctionCallContent>().Where(callFunctionCallContent => callFunctionCallContent.CallId == resultFunctionResultContent.CallId).ToList();
+        if (callsFunctionCallContents.Count != 1 || callsFunctionCallContents[0].Name != ExperienceAssistant.ToolNameString || resultFunctionResultContent.Exception is not null)
+        {
             throw new InvalidDataException("Expected exactly one successful CalculateExperience execution.");
+        }
     }
 }
-

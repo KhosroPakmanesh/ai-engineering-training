@@ -11,7 +11,9 @@ public class IndexValidatorTests
     {
         ChunkIndex chunkIndex = RagFixtures.CreateIndex();
         IndexValidator.Validate(chunkIndex);
-        Assert.Contains("embedding model", Assert.Throws<InvalidDataException>(() =>
+        Assert.Contains(
+            "embedding model",
+            Assert.Throws<InvalidDataException>(() =>
             IndexValidator.ValidateCompatibility(chunkIndex, "OpenRouter", "different-model", 650, 80)).Message);
         List<float> wrongDimensionsFloats = [1, 0, 0];
         List<float> nonfiniteVectorFloats = [float.NaN, 1];

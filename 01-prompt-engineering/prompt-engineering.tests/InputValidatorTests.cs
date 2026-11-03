@@ -2,33 +2,21 @@ using Xunit;
 
 public class InputValidatorTests
 {
-    // Find a missing prompt file before making any paid model calls.
+    // A missing instruction is an input error even when the earlier case is usable.
     [Fact]
-    public async Task Missing_prompt_is_rejected_during_preparation_without_an_api_request()
+    public void Empty_later_instruction_is_rejected()
     {
-        await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            InputValidator.ValidateInputsAsync(["Prompts/does-not-exist.txt"]));
+        var comparisonInputs = new ComparisonInputs("Fictional resume.", [new("A", "a.txt", "Summarize."), new("B", "b.txt", " ")]);
+        InvalidDataException invalidDataException = Assert.Throws<InvalidDataException>(() => InputValidator.Validate(comparisonInputs));
+        Assert.Contains("prompt instruction", invalidDataException.Message);
     }
 
     // A later empty comparison case must stop preparation even when an earlier prompt is usable.
     [Fact]
-    public async Task Empty_prompt_is_rejected_before_an_api_request()
+    public void Empty_resume_is_rejected()
     {
-        string promptFile = Path.GetTempFileName();
-        try
-        {
-            InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(() =>
-                InputValidator.ValidateInputsAsync(
-                [
-                    "Prompts/A-zero-shot.txt",
-                    promptFile
-                ]
-            ));
-            Assert.Contains("The prompt instruction is empty.", error.Message);
-        }
-        finally
-        {
-            File.Delete(promptFile);
-        }
+        var comparisonInputs = new ComparisonInputs(" ", [new("A", "a.txt", "Summarize.")]);
+        InvalidDataException invalidDataException = Assert.Throws<InvalidDataException>(() => InputValidator.Validate(comparisonInputs));
+        Assert.Contains("resume is empty", invalidDataException.Message);
     }
 }

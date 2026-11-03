@@ -22,8 +22,21 @@ public class ChunkEmbedderTests
     {
         List<SourceDocument> sourceDocuments = await DocumentsLoader.LoadAsync(Path.Combine(AppContext.BaseDirectory, "SampleData"));
         List<RagQuestion> ragQuestions = RagFixtures.CreateQuestions();
-        if (invalidInputString == "document") sourceDocuments[^1] = sourceDocuments[^1] with { TextString = " " };
-        else ragQuestions[^1] = ragQuestions[^1] with { TextString = "" };
+        if (invalidInputString == "document")
+        {
+            sourceDocuments[^1] = sourceDocuments[^1] with
+            {
+                TextString = " "
+            };
+        }
+        else
+        {
+            ragQuestions[^1] = ragQuestions[^1] with
+            {
+                TextString = ""
+            };
+        }
+
         using var embeddingResponseHandler = new EmbeddingResponseHandler(BatchResponseString);
         using var httpClient = new HttpClient(embeddingResponseHandler);
         using IEmbeddingGenerator<string, Embedding<float>> iEmbeddingGenerator = CreateGenerator(httpClient);
@@ -49,7 +62,13 @@ public class ChunkEmbedderTests
         List<SourceDocument> sourceDocuments = await DocumentsLoader.LoadAsync(Path.Combine(AppContext.BaseDirectory, "SampleData"));
         List<RagQuestion> ragQuestions = RagFixtures.CreateQuestions();
         ChunkIndex previousChunkIndex = RagFixtures.CreateIndex();
-        previousChunkIndex = previousChunkIndex with { IndexMetadata = previousChunkIndex.IndexMetadata with { EmbeddingModelString = "other-model" } };
+        previousChunkIndex = previousChunkIndex with
+        {
+            IndexMetadata = previousChunkIndex.IndexMetadata with
+            {
+                EmbeddingModelString = "other-model"
+            }
+        };
         using var embeddingResponseHandler = new EmbeddingResponseHandler(BatchResponseString);
         using var httpClient = new HttpClient(embeddingResponseHandler);
         using IEmbeddingGenerator<string, Embedding<float>> iEmbeddingGenerator = CreateGenerator(httpClient);
@@ -63,7 +82,11 @@ public class ChunkEmbedderTests
             IndexValidator.ValidateCompatibility(previousChunkIndex, "OpenRouter", "test-embedding", 650, 80);
             List<DocumentChunk> changedDocumentChunks = IndexPreparer.FindChanged(documentChunks, previousChunkIndex);
             List<string> documentTextStrings = changedDocumentChunks.Select(documentChunk => documentChunk.HeadingString + "\n" + documentChunk.TextString).ToList();
-            if (changedDocumentChunks.Count > 0) await ChunkEmbedder.RequestAsync(iEmbeddingGenerator, documentTextStrings);
+            if (changedDocumentChunks.Count > 0)
+            {
+                await ChunkEmbedder.RequestAsync(iEmbeddingGenerator, documentTextStrings);
+            }
+
             await ChunkEmbedder.RequestAsync(iEmbeddingGenerator, questionTextStrings);
         });
 
@@ -84,7 +107,8 @@ public class ChunkEmbedderTests
         EmbeddingValidator.Validate(generatedEmbeddings, textsStrings.Count, "test-embedding");
 
         using JsonDocument requestJsonDocument = JsonDocument.Parse(Assert.Single(embeddingResponseHandler.RequestBodyStrings));
-        Assert.Equal(textsStrings, requestJsonDocument.RootElement.GetProperty("input").EnumerateArray().Select(textJsonElement => textJsonElement.GetString()));
+        Assert.Equal(textsStrings,
+            requestJsonDocument.RootElement.GetProperty("input").EnumerateArray().Select(textJsonElement => textJsonElement.GetString()));
         Assert.Equal("test-embedding", requestJsonDocument.RootElement.GetProperty("model").GetString());
         Assert.True(embeddingResponseHandler.HadCancelableTokenBool);
         Assert.Equal(new float[] { 1, 0 }, generatedEmbeddings[0].Vector.ToArray());
@@ -101,7 +125,10 @@ public class ChunkEmbedderTests
         using var embeddingResponseHandler = new EmbeddingResponseHandler(BatchResponseString, holdResponseBool: true);
         using var httpClient = new HttpClient(embeddingResponseHandler);
         using IEmbeddingGenerator<string, Embedding<float>> iEmbeddingGenerator = CreateGenerator(httpClient);
-        if (cancelBeforeRequestBool) callerCancellationTokenSource.Cancel();
+        if (cancelBeforeRequestBool)
+        {
+            callerCancellationTokenSource.Cancel();
+        }
 
         try
         {
@@ -113,12 +140,17 @@ public class ChunkEmbedderTests
             }
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pendingGeneratedEmbeddingsTask.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal(cancelBeforeRequestBool ? 0 : 1, embeddingResponseHandler.RequestBodyStrings.Count);
-            if (!cancelBeforeRequestBool) Assert.True(embeddingResponseHandler.HadCancelableTokenBool);
+            if (!cancelBeforeRequestBool)
+            {
+                Assert.True(embeddingResponseHandler.HadCancelableTokenBool);
+            }
         }
         finally { callerCancellationTokenSource.Cancel(); }
     }
 
     // Use the real shared SDK adapter with fictional settings; the injected HTTP handler owns all responses.
-    private static IEmbeddingGenerator<string, Embedding<float>> CreateGenerator(HttpClient httpClient) =>
-        new AiClientFactory().CreateEmbeddingGenerator(new("OpenRouter", "test-key", "test-embedding", new("https://example.invalid/v1")), httpClient);
+    private static IEmbeddingGenerator<string, Embedding<float>> CreateGenerator(HttpClient httpClient)
+    {
+        return new AiClientFactory().CreateEmbeddingGenerator(new("OpenRouter", "test-key", "test-embedding", new("https://example.invalid/v1")), httpClient);
+    }
 }

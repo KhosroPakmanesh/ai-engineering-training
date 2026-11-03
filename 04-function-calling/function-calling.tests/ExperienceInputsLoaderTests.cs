@@ -6,14 +6,14 @@ public class ExperienceInputsLoaderTests
     [Fact]
     public async Task Copied_jobs_keep_the_supplied_question_and_evaluation_date()
     {
-        const string question = "How much experience?";
-        const string evaluationDate = "2023-04-01";
-        ExperienceInputs inputs = await ExperienceInputsLoader.LoadAsync(question, evaluationDate);
+        const string questionString = "How much experience?";
+        const string evaluationDateString = "2023-04-01";
+        ExperienceInputs experienceInputs = await ExperienceInputsLoader.LoadAsync(questionString, evaluationDateString);
 
-        Assert.Equal(question, inputs.Question);
-        Assert.Equal(evaluationDate, inputs.EvaluationDate);
-        Assert.Equal(3, inputs.Intervals.Count);
-        Assert.Equal(new WorkInterval("2020-01-01", "2021-07-01"), inputs.Intervals[0]);
-        Assert.Null(inputs.Intervals[2].EndDate);
+        Assert.Equal(questionString, experienceInputs.QuestionString);
+        Assert.Equal(evaluationDateString, experienceInputs.EvaluationDateString);
+        Assert.Equal(3, experienceInputs.WorkIntervals.Count);
+        Assert.Equal(new WorkInterval("2020-01-01", "2021-07-01"), experienceInputs.WorkIntervals[0]);
+        Assert.Null(experienceInputs.WorkIntervals[2].EndDateString);
     }
 }

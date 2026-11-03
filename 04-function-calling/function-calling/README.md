@@ -11,7 +11,7 @@ Both paths use the same calculator and month-counting rule. The instruction tell
 
 ## Execution flow
 
-Follow the arrows from top to bottom. Program.cs loads the source inputs and explicitly calls ExperienceInputsValidator.cs before making a paid request. Tool arguments are checked against those inputs because a model can return different dates even when its JSON looks valid.
+Follow the arrows from top to bottom. Program.cs has preparation, tool conversation, acceptance checks, and results chapters, each with numbered steps. It loads the source inputs and explicitly calls ExperienceInputsValidator.cs before making a paid request. Tool arguments are checked against those inputs because a model can return different dates even when its JSON looks valid.
 
 ```mermaid
 flowchart TD
@@ -20,7 +20,7 @@ flowchart TD
     O --> C["ExperienceAssistant.cs<br/>Create AIFunction and ChatClientAgent with ChatOptions"]
     C --> D["ExperienceAssistant.cs<br/>Call agent.RunAsync; first model call with the available tool"]
     D --> E{"Did the model select CalculateExperience?"}
-    E -->|Yes| F{"ExperienceAssistant.cs<br/>Do arguments match the supplied jobs and date?"}
+    E -->|Yes| F{"ExperienceAssistant.cs<br/>First tool invocation and unchanged source arguments?"}
     F -->|Yes| G["ExperienceCalculator.cs<br/>Sort, merge intervals, and count full months"]
     G --> H["FunctionInvokingChatClient<br/>Record FunctionResultContent; send the second model call"]
     H --> R{"ExperienceAssistant.cs<br/>Is the final answer present and complete?"}
@@ -47,7 +47,7 @@ The calculator sorts intervals and merges overlaps, duplicates, and touching int
 
 ExperienceAssistant.cs binds an ordinary C# callback to this run's original inputs. It rejects changed, omitted, added, or reordered intervals and a changed evaluation date. ExperienceAssistant.cs uses `AIFunctionFactory.Create` to generate the argument schema from that callback's parameter types. Agent Framework performs the actual invocation loop. Tool choice is automatic, so a model that answers without a tool is detected rather than treated as success. The callback measures its local work and calls OutputPrinter.cs from `finally` to retain the redacted log on both success and failure. The printer formats supplied values; it does not execute or validate the tool.
 
-ExperienceAssistant.cs uses the framework's FunctionInvokingChatClient for one tool round trip: a model call to select the function, followed by a model call to explain its result. It handles argument conversion, calls the registered function, and sends the result back to the model. Function errors stop before a follow-up model request. The instruction requests one calculation, and ToolExecutionValidator checks that exactly one successful result was returned; this check runs after the conversation. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
+ExperienceAssistant.cs uses the framework's FunctionInvokingChatClient for one tool round trip: a model call to select the function, followed by a model call to explain its result. It handles argument conversion, calls the registered function, and sends the result back to the model. Function errors stop before a follow-up model request. A per-run counter in the callback rejects a second invocation before calculation starts, including multiple calls in one provider response. AllowMultipleToolCalls=false remains a request preference, while the callback enforces the hard execution budget. ToolExecutionValidator separately checks the returned successful result after the conversation. The callback receives native cancellation and checks the shared run deadline before and after its local work; cancellation is excluded from the model-visible argument schema. [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) retains the original SDK assistant tool message so opaque provider fields, including Gemini thought signatures, survive the next turn.
 
 After RunAsync, ExperienceAssistant.cs checks the native finish reason and rejects empty final assistant text. Program.cs then calls ToolExecutionValidator.cs to check execution, ExperienceResponseParser.cs to read the final answer, typed calculation result, and call counts, and ExperienceResultValidator.cs to check the answer. The parser returns a `ParsedExperienceResponse` containing an `ExperienceResult` and excludes earlier assistant preambles from the answer. Its deliberately small answer contract is `<integer> full calendar months [CalculateExperience.totalMonths].` The citation is literal text. Checking the complete sentence prevents additional unsupported totals from being accepted. Local check failures do not trigger repair requests.
 
@@ -78,7 +78,7 @@ A missing or invalid reference date fails before an API request. Zero tool calls
 
 The fictional jobs cover January 2020-July 2021, January 2021-January 2022, and April 2022 through the explicit April 2023 evaluation date. Summing jobs separately gives 42 months. The first two overlap for six months, so their merged coverage is 24 months. The current role contributes 12 more, giving **36 full calendar months** across two merged intervals.
 
-OutputPrinter.cs introduces the two model turns before the request. Green headings separate the stages, and provider details and the redacted tool log appear in grey. The shared ConsoleOutput.cs helper restores the terminal's original colour. Redirected output stays plain text. After the accepted answer, the takeaway explains full-month counting and asks you to predict the effect of changing one source date.
+OutputPrinter.cs introduces the two model turns before the request. Green headings separate the stages, and provider details and the redacted tool log appear in grey. The shared ConsoleOutput.cs helper restores the terminal's original colour. Redirected output stays plain text. The accepted answer has a numbered white block and a separate list identifying its calculator citation. After the accepted answer, the takeaway explains full-month counting and asks you to predict the effect of changing one source date.
 
 A successful run includes:
 
@@ -100,7 +100,7 @@ The checks establish that the printed number matches an executed calculation ove
 
 1. Read [jobs.json](SampleData/jobs.json). Calculate each job separately, then predict the overlap-adjusted total. Run and compare your prediction with the merged count and accepted answer.
 2. Change one start date to the middle of a month and rebuild. Predict which whole calendar months remain covered after merging.
-3. Change `evaluationDate` in Program.cs. The current role should use that exact date. Try an invalid date and observe that the program stops before a model request.
+3. Change `evaluationDateString` in Program.cs. The current role should use that exact date. Try an invalid date and observe that the program stops before a model request.
 4. Read the direct calculator tests, then follow the same function through ExperienceAssistant.cs and its native framework loop. Each successful run makes another two model calls, with at most six HTTP attempts.
 
 ## Files to read
@@ -132,14 +132,14 @@ Start with Program.cs and follow its separate loading and validation calls. Read
 
 ## Tests
 
-The project contains **37 cases: 36 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
+The project contains **40 cases: 39 deterministic cases and one live integration case**. Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualstudio 4.0.1.
 
 | Test file | Checks |
 | --- | --- |
 | [ExperienceInputsLoaderTests.cs](../function-calling.tests/ExperienceInputsLoaderTests.cs) | Copied jobs retain the selected question, evaluation date, and original work dates. |
 | [ExperienceInputsValidatorTests.cs](../function-calling.tests/ExperienceInputsValidatorTests.cs) | Empty questions, missing jobs, invalid or partial dates, unresolved current roles, and reversed chronology. |
 | [ExperienceCalculatorTests.cs](../function-calling.tests/ExperienceCalculatorTests.cs) | Validated separate and overlapping jobs, current roles, leap dates, partial months, duplicates, touching intervals, and unchanged inputs. |
-| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real native requests, the framework iteration limit, source preservation, empty or truncated final answers, zero tool calls, validation preventing requests, and one complete live acceptance flow. |
+| [ExperienceAssistantTests.cs](../function-calling.tests/ExperienceAssistantTests.cs) | Real native requests, the framework iteration limit, the hard one-execution guard, unchanged tool argument fields, cancellation, source preservation, empty/truncated final answers, zero tool calls, validation preventing requests, and one complete live acceptance flow. |
 | [ToolExecutionValidatorTests.cs](../function-calling.tests/ToolExecutionValidatorTests.cs) | Missing, wrong, failed, and repeated native function results are rejected. |
 | [ExperienceResponseParserTests.cs](../function-calling.tests/ExperienceResponseParserTests.cs) | Final answer selection, typed results, model/tool counts, and rejection of a null calculation result. |
 | [ExperienceResultValidatorTests.cs](../function-calling.tests/ExperienceResultValidatorTests.cs) | Wrong totals, missing citations, and extra claims are rejected. |

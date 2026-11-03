@@ -1,2 +1,5 @@
-// Skills describe fictional work; both search methods compare only the unchanged Text field.
-public sealed record ProjectDescription(string Id, string Text, List<string> Skills);
+using System.Text.Json.Serialization;
+
+// Both searches compare the original text; skills remain fictional metadata.
+public sealed record ProjectDescription([property: JsonPropertyName("id")] string IdString,
+    [property: JsonPropertyName("text")] string TextString, [property: JsonPropertyName("skills")] List<string> SkillStrings);

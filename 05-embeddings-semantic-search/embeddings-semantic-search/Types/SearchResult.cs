@@ -1,2 +1,6 @@
-// One index belongs to one provider, model, and vector size.
-public sealed record SearchResult(int Rank, string DocumentId, double Score, string Snippet);
+using System.Text.Json.Serialization;
+
+// One ranked match contains its position, source ID, score, and short excerpt.
+public sealed record SearchResult([property: JsonPropertyName("rank")] int RankInt,
+    [property: JsonPropertyName("documentId")] string DocumentIdString, [property: JsonPropertyName("score")] double ScoreDouble,
+    [property: JsonPropertyName("snippet")] string SnippetString);

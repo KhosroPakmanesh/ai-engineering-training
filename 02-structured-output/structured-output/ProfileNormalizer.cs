@@ -1,9 +1,12 @@
-﻿public static class ProfileNormalizer
+public static class ProfileNormalizer
 {
     // Keep the first entry for each skill, with its spelling and supporting quote.
-    public static CandidateProfile NormalizeProfile(CandidateProfile profile) => profile with
+    public static CandidateProfile NormalizeProfile(CandidateProfile candidateProfile)
     {
-        Skills = profile.Skills.Select(skill => skill with { Name = skill.Name.Trim() })
-            .DistinctBy(skill => skill.Name, StringComparer.OrdinalIgnoreCase).ToList()
-    };
+        return candidateProfile with
+        {
+            Skills = candidateProfile.Skills.Select(skill => skill with { NameString = skill.NameString.Trim() })
+            .DistinctBy(skill => skill.NameString, StringComparer.OrdinalIgnoreCase).ToList()
+        };
+    }
 }

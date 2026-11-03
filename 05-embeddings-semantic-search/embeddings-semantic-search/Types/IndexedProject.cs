@@ -1,2 +1,5 @@
-// One index belongs to one provider, model, and vector size.
-public sealed record IndexedProject(ProjectDescription Project, List<float> Vector);
+using System.Text.Json.Serialization;
+
+// Pair an original project description with its normalized embedding vector.
+public sealed record IndexedProject([property: JsonPropertyName("project")] ProjectDescription ProjectDescription,
+    [property: JsonPropertyName("vector")] List<float> VectorFloats);

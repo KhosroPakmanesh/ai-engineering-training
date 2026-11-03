@@ -1,27 +1,42 @@
-﻿using Json.Schema;
 using System.Text.Json;
+using Json.Schema;
 
 public static class JsonResumeSchemaValidator
 {
     // Reject repeated field names and values that do not match the required JSON format.
-    public static void ValidateSchema(string jsonResume)
+    public static void ValidateSchema(string jsonResumeString)
     {
-        using JsonDocument document = JsonDocument.Parse(jsonResume, new JsonDocumentOptions { AllowDuplicateProperties = false });
+        using JsonDocument jsonDocument = JsonDocument.Parse(jsonResumeString, new JsonDocumentOptions { AllowDuplicateProperties = false });
 
-        JsonSchema schema = JsonSchema.FromText(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
+        JsonSchema jsonSchema = JsonSchema.FromText(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
 
-        EvaluationResults evaluation = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
-        if (!evaluation.IsValid)
-            throw new InvalidDataException(string.Join(Environment.NewLine, SchemaErrors(evaluation)));
+        EvaluationResults evaluationResults = jsonSchema.Evaluate(jsonDocument.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        if (!evaluationResults.IsValid)
+        {
+            throw new InvalidDataException(string.Join(Environment.NewLine, SchemaErrors(evaluationResults)));
+        }
     }
+
     // Include each field's path so the learner can find the invalid value.
-    private static IEnumerable<string> SchemaErrors(EvaluationResults result)
+    private static IEnumerable<string> SchemaErrors(EvaluationResults resultEvaluationResults)
     {
-        if (result.Errors is not null)
-            foreach (var error in result.Errors)
-                yield return $"{(result.InstanceLocation.ToString() == "" ? "$" : result.InstanceLocation)}: {error.Value}";
-        if (result.Details is not null)
-            foreach (EvaluationResults detail in result.Details)
-                foreach (string error in SchemaErrors(detail)) yield return error;
+        if (resultEvaluationResults.Errors is not null)
+        {
+            foreach (var errorKeyValuePair in resultEvaluationResults.Errors)
+            {
+                yield return $"{(resultEvaluationResults.InstanceLocation.ToString() == "" ? "$" : resultEvaluationResults.InstanceLocation)}: {errorKeyValuePair.Value}";
+            }
+        }
+
+        if (resultEvaluationResults.Details is not null)
+        {
+            foreach (EvaluationResults detailEvaluationResults in resultEvaluationResults.Details)
+            {
+                foreach (string errorString in SchemaErrors(detailEvaluationResults))
+                {
+                    yield return errorString;
+                }
+            }
+        }
     }
 }

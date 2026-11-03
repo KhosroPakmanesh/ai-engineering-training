@@ -9,5 +9,6 @@
     <PackageReference Include="JsonSchema.Net" Version="9.4.1" />
     <None Update="profile.schema.json;SampleData/**/*" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../shared/shared/shared.csproj" />
+    <InternalsVisibleTo Include="structured-output.tests" />
   </ItemGroup>
 </Project>

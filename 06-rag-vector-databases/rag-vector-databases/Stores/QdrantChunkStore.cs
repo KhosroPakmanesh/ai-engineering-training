@@ -40,7 +40,11 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
                     ?? throw new InvalidDataException("Invalid Qdrant chunk.");
                 indexedChunks.Add(new(documentChunk, retrievedPoint.Vectors.Vector.Dense.Data.ToList()));
             }
-            if (indexedChunks.Count > 500) throw new InvalidDataException("The lesson collection exceeds 500 chunks.");
+            if (indexedChunks.Count > 500)
+            {
+                throw new InvalidDataException("The lesson collection exceeds 500 chunks.");
+            }
+
             offsetPointId = pageScrollResponse.NextPageOffset;
         } while (offsetPointId is not null);
 
@@ -56,7 +60,8 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
             throw new InvalidDataException("Qdrant collection dimension or distance does not match the index metadata.");
         }
 
-        return new(indexMetadata, indexedChunks.OrderBy(indexedChunk => indexedChunk.DocumentChunk.ChunkIdString, StringComparer.Ordinal).ToList());
+        return new(indexMetadata,
+            indexedChunks.OrderBy(indexedChunk => indexedChunk.DocumentChunk.ChunkIdString, StringComparer.Ordinal).ToList());
     }
 
     // Upsert the desired collection, then remove stale points. These server operations are not a transaction.
@@ -65,13 +70,14 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
         ChunkIndex? previousChunkIndex = await ReadAsync(cancellationToken);
         if (!await qdrantClient.CollectionExistsAsync(collectionNameString, cancellationToken))
         {
-            await qdrantClient.CreateCollectionAsync(collectionNameString,
+            await qdrantClient.CreateCollectionAsync(
+                collectionNameString,
                 new VectorParams
                 {
                     Size = (ulong)chunkIndex.IndexMetadata.DimensionsInt,
                     Distance = Distance.Cosine
                 },
-            cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken);
         }
 
         CollectionInfo collectionInfo = await qdrantClient.GetCollectionInfoAsync(collectionNameString, cancellationToken);
@@ -84,6 +90,7 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
 
         var pointStructs = new List<PointStruct>();
         foreach (IndexedChunk indexedChunk in chunkIndex.IndexedChunks)
+        {
             pointStructs.Add(new PointStruct
             {
                 Id = PointIdFor(indexedChunk.DocumentChunk.ChunkIdString),
@@ -93,6 +100,7 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
                     ["metadata"] = JsonSerializer.Serialize(chunkIndex.IndexMetadata)
                 }
             });
+        }
 
         await qdrantClient.UpsertAsync(collectionNameString, pointStructs, wait: true, cancellationToken: cancellationToken);
 
@@ -110,15 +118,18 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
     }
 
     // Qdrant uses UUID point IDs. Hashing the source ID makes upserts stable across processes and runs.
-    private static Guid PointIdFor(string chunkIdString) => new(SHA256.HashData(Encoding.UTF8.GetBytes(chunkIdString)).AsSpan(0, 16));
+    private static Guid PointIdFor(string chunkIdString)
+    {
+        return new(SHA256.HashData(Encoding.UTF8.GetBytes(chunkIdString)).AsSpan(0, 16));
+    }
 
     // Ask the server for exact cosine search. A final ID sort makes returned ties easier to inspect.
     public async Task<List<RetrievedChunk>> SearchAsync(List<float> queryFloats, int topKInt, CancellationToken cancellationToken = default)
     {
         IReadOnlyList<ScoredPoint> retrievedScoredPoints =
             await qdrantClient.QueryAsync(collectionNameString, query: queryFloats.ToArray(),
-            searchParams: new SearchParams { Exact = true },
-            limit: (ulong)topKInt, payloadSelector: true, cancellationToken: cancellationToken);
+                searchParams: new SearchParams { Exact = true }, limit: (ulong)topKInt, payloadSelector: true,
+                cancellationToken: cancellationToken);
 
         return retrievedScoredPoints
             .Select(scoredPoint => new RetrievedChunk(
@@ -132,5 +143,8 @@ public sealed class QdrantChunkStore(QdrantClient qdrantClient, string collectio
     }
 
     // The selected store owns its SDK connection.
-    public void Dispose() => qdrantClient.Dispose();
+    public void Dispose()
+    {
+        qdrantClient.Dispose();
+    }
 }

@@ -5,8 +5,8 @@ namespace ResumeRag;
 public static class EmbeddingValidator
 {
     // Shared plumbing checked wire order; the lesson checks count, model, dimensions, and numeric values.
-    public static void Validate(GeneratedEmbeddings<Embedding<float>> generatedEmbeddings,
-        int countInt, string modelString, int? dimensionsInt = null)
+    public static void Validate(GeneratedEmbeddings<Embedding<float>> generatedEmbeddings, int countInt, string modelString,
+        int? dimensionsInt = null)
     {
         if (countInt <= 0 || generatedEmbeddings.Count != countInt)
         {

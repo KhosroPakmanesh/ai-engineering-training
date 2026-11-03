@@ -1,7 +1,7 @@
 using Microsoft.Extensions.AI;
 
-const string query = "experience building containerized APIs";
-const int topK = 5;
+const string queryString = "experience building containerized APIs";
+const int topKInt = 5;
 
 try
 {
@@ -9,113 +9,112 @@ try
     //                              Preparation                               //
     //------------------------------------------------------------------------//
 
-    string folder = AppContext.BaseDirectory;
+    string folderString = AppContext.BaseDirectory;
 
-    // Shared preparation: check all inputs and prepare both batches before the first paid request.
-    List<ProjectDescription> projects = await ProjectDescriptionsLoader
-        .LoadAsync(Path.Combine(folder, "SampleData", "projects.json"));
+    // 1. Load all source descriptions before preparing the comparison.
+    List<ProjectDescription> projectDescriptions = await ProjectDescriptionsLoader
+        .LoadAsync(Path.Combine(folderString, "SampleData", "projects.json"));
 
-    // Validate the query, top-k, and each project before sending any paid requests.
-    SearchInputsValidator.Validate(projects, query, topK);
+    // 2. Validate the query, top-k, and every project before paid work.
+    SearchInputsValidator.Validate(projectDescriptions, queryString, topKInt);
 
-    // The local index uses only the original project text, not the skills or other fields.
-    List<string> documentTexts = projects.Select(project => project.Text).ToList();
-    List<string> queryTexts = [query];
+    // 3. Prepare both batches from the unchanged original text.
+    List<string> documentTextStrings = projectDescriptions.Select(projectDescription => projectDescription.TextString).ToList();
+    List<string> queryTextStrings = [queryString];
 
     //------------------------------------------------------------------------//
     //                            KEYWORD SEARCH                              //
     //------------------------------------------------------------------------//
 
     // 1. Rank the original project text by matching query words.
-    List<SearchResult> lexicalResults = LexicalSearch.Rank(projects, query, topK);
-  
+    List<SearchResult> lexicalSearchResults = LexicalSearch.Rank(projectDescriptions, queryString, topKInt);
+
     //------------------------------------------------------------------------//
     //                            SEMANTIC SEARCH                             //
     //------------------------------------------------------------------------//
 
     // 1. Read settings and create the embedding generator.
     // Embeddings use a separate model setting, leaving the four chat lessons unchanged.
-    ProviderSettings settings = await SettingsReader
-        .ReadSettingsAsync(folder, useEmbeddingModel: true);
+    ProviderSettings providerSettings = await SettingsReader
+        .ReadSettingsAsync(folderString, useEmbeddingModelBool: true);
 
     // Keep provider connections in the shared factory.
-    var factory = new AiClientFactory();
+    var aiClientFactory = new AiClientFactory();
 
     // Use Microsoft's embedding interface with the separately configured embedding model.
-    using IEmbeddingGenerator<string, Embedding<float>> generator = 
-        factory.CreateEmbeddingGenerator(settings);
-    OutputPrinter.PrintIntroduction(query, projects.Count, topK, settings);
+    using IEmbeddingGenerator<string, Embedding<float>> iEmbeddingGenerator =
+        aiClientFactory.CreateEmbeddingGenerator(providerSettings);
+    OutputPrinter.PrintIntroduction(queryString, projectDescriptions.Count, topKInt, providerSettings);
 
     // 2. Request and validate document embeddings before accepting their vectors.
-    GeneratedEmbeddings<Embedding<float>> documentEmbeddings =
-        await ProjectEmbedder.RequestAsync(generator, documentTexts);
+    GeneratedEmbeddings<Embedding<float>> documentGeneratedEmbeddings =
+        await ProjectEmbedder.RequestAsync(iEmbeddingGenerator, documentTextStrings);
 
     // Check model, count, and vectors before normalization; shared plumbing has checked and ordered wire indexes.
-    EmbeddingResponseValidator.Validate(documentEmbeddings, projects.Count, settings.Model);
+    EmbeddingResponseValidator.Validate(documentGeneratedEmbeddings, projectDescriptions.Count, providerSettings.ModelString);
 
     // 3. Normalize document vectors and build the index with their original project text.
     var indexedProjects = new List<IndexedProject>();
-    for (int index = 0; index < projects.Count; index++)
-        indexedProjects.Add(
-            new(
-                projects[index], 
-                VectorNormalizer.Normalize(documentEmbeddings[index].Vector.Span))
-            );
+    for (int indexInt = 0; indexInt < projectDescriptions.Count; indexInt++)
+    {
+        List<float> normalizedVectorFloats = VectorNormalizer.Normalize(documentGeneratedEmbeddings[indexInt].Vector.Span);
+        indexedProjects.Add(new IndexedProject(projectDescriptions[indexInt], normalizedVectorFloats));
+    }
 
     // The local index uses the same model and vector dimensions as the remote embedding service.
-    var searchIndex = new SearchIndex(settings.Name, settings.Model, 
-        documentEmbeddings[0].Dimensions, indexedProjects);
+    var searchIndex = new SearchIndex(ProviderString: providerSettings.NameString, ModelString: providerSettings.ModelString,
+        DimensionsInt: documentGeneratedEmbeddings[0].Dimensions, IndexedProjects: indexedProjects);
 
     // 4. Save, reload, and validate the complete SQLite index.
     // Replace the collection so changed or removed projects cannot leave stale vectors.
     SearchIndexValidator.Validate(searchIndex);
 
     // Store document vectors locally; the query still needs its own embedding request.
-    string indexPath = Path.Combine(folder, "projects.sqlite");
-    SqliteSearchIndex.Replace(indexPath, searchIndex);
+    string indexPathString = Path.Combine(folderString, "projects.sqlite");
+    SqliteSearchIndex.Replace(indexPathString, searchIndex);
 
     // Read the stored index and validate it before semantic search.
-    SearchIndex storedIndex = SqliteSearchIndex.Read(indexPath);
-    SearchIndexValidator.Validate(storedIndex);
+    SearchIndex storedSearchIndex = SqliteSearchIndex.Read(indexPathString);
+    SearchIndexValidator.Validate(storedSearchIndex);
 
     // 5. Request and validate the query embedding.
-    GeneratedEmbeddings<Embedding<float>> queryEmbeddings = 
-        await ProjectEmbedder.RequestAsync(generator, queryTexts);
+    GeneratedEmbeddings<Embedding<float>> queryGeneratedEmbeddings =
+        await ProjectEmbedder.RequestAsync(iEmbeddingGenerator, queryTextStrings);
 
     // Check model, count, and vectors before normalization; shared plumbing has checked and ordered wire indexes.
-    EmbeddingResponseValidator.Validate(queryEmbeddings, 1, settings.Model);
+    EmbeddingResponseValidator.Validate(queryGeneratedEmbeddings, 1, providerSettings.ModelString);
 
     // Read the one vector returned for the query.
-    Embedding<float> queryEmbedding = queryEmbeddings[0];
+    Embedding<float> queryEmbedding = queryGeneratedEmbeddings[0];
 
     // 6. Check compatibility and normalize the query vector.
     // The query and stored documents must use the same provider, model, and vector size.
-    SearchIndexValidator.ValidateCompatibility
-        (storedIndex, settings.Name, queryEmbedding.ModelId!, queryEmbedding.Vector.Span);
+    SearchIndexValidator.ValidateCompatibility(storedSearchIndex, providerSettings.NameString, queryEmbedding.ModelId!, queryEmbedding.Vector.Span);
 
     // Normalize the query vector to length one for cosine similarity comparison with the stored vectors.
-    List<float> normalizedQuery = VectorNormalizer.Normalize(queryEmbedding.Vector.Span);
+    List<float> normalizedQueryFloats = VectorNormalizer.Normalize(queryEmbedding.Vector.Span);
 
     // 7. Rank the stored projects by cosine similarity to the normalized query vector.
-    List<SearchResult> semanticResults = SemanticSearch.Rank(storedIndex, normalizedQuery, topK);
+    List<SearchResult> semanticSearchResults = SemanticSearch.Rank(storedSearchIndex, normalizedQueryFloats, topKInt);
 
     //------------------------------------------------------------------------//    
     //                         RESULTS AND COMPARISON                         //
     //------------------------------------------------------------------------//
 
     // 1. Show the query, index details, and the limits of comparing the score scales.
-    OutputPrinter.PrintComparisonGuide(query);
+    OutputPrinter.PrintComparisonGuide(queryString);
 
     // 2. Show both rankings, starting at rank 1, with excerpts for the learner to judge.
     OutputPrinter.PrintResultsHeading();
-    for (int index = 0; index < semanticResults.Count; index++)
+    for (int indexInt = 0; indexInt < semanticSearchResults.Count; indexInt++)
     {
-        SearchResult semantic = semanticResults[index];
-        SearchResult lexical = lexicalResults[index];
-        OutputPrinter.PrintRankComparison(semantic, lexical);
+        SearchResult semanticSearchResult = semanticSearchResults[indexInt];
+        SearchResult lexicalSearchResult = lexicalSearchResults[indexInt];
+        OutputPrinter.PrintRankComparison(semanticSearchResult, lexicalSearchResult);
     }
+
     // 3. Report input token counts when the provider supplies them.
-    OutputPrinter.PrintIndexDetails(storedIndex, indexPath, documentEmbeddings.Usage, queryEmbeddings.Usage);
+    OutputPrinter.PrintIndexDetails(storedSearchIndex, indexPathString, documentGeneratedEmbeddings.Usage, queryGeneratedEmbeddings.Usage);
     OutputPrinter.PrintTakeaway();
 
     return 0;
@@ -125,8 +124,8 @@ catch (OperationCanceledException)
     Console.Error.WriteLine("The request was canceled or exceeded the 120-second time limit.");
     return 1;
 }
-catch (Exception error)
+catch (Exception errorException)
 {
-    Console.Error.WriteLine(error.Message);
+    Console.Error.WriteLine(errorException.Message);
     return 1;
 }

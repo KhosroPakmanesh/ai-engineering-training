@@ -1,117 +1,149 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 public class ProfileValidator
 {
     private readonly string rawStringResume;
-    private readonly string resumeFileName;
-    private readonly List<string> errors = [];
+    private readonly string resumeFileNameString;
+    private readonly List<string> errorStrings = [];
 
     // Store the source once so every check uses the same resume and filename.
-    public ProfileValidator(string rawStringResume, string resumeFileName)
+    public ProfileValidator(string rawStringResume, string resumeFileNameString)
     {
         this.rawStringResume = rawStringResume;
-        this.resumeFileName = resumeFileName;
+        this.resumeFileNameString = resumeFileNameString;
     }
 
     // Keep each call's source and errors separate so different profiles can be checked at the same time.
-    public static void ValidateProfile(CandidateProfile profile, string rawStringResume, string resumeFileName)
+    public static void ValidateProfile(CandidateProfile candidateProfile, string rawStringResume, string resumeFileNameString)
     {
-        new ProfileValidator(rawStringResume, resumeFileName).Validate(profile);
+        new ProfileValidator(rawStringResume, resumeFileNameString).Validate(candidateProfile);
     }
+
     // Report all failed checks together before the profile can reach normalization.
-    public void Validate(CandidateProfile profile)
+    public void Validate(CandidateProfile candidateProfile)
     {
-        CheckEvidence(profile.Evidence, "", profile.Name, profile.Email, profile.Phone);
-        CheckExperience(profile.Experience);
-        CheckEducation(profile.Education);
-        CheckSkills(profile.Skills);
+        CheckEvidence(candidateProfile.Evidence, "", candidateProfile.NameString, candidateProfile.EmailString,
+            candidateProfile.PhoneString);
+        CheckExperience(candidateProfile.Experiences);
+        CheckEducation(candidateProfile.Educations);
+        CheckSkills(candidateProfile.Skills);
 
-        if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+        if (errorStrings.Count > 0)
+        {
+            throw new InvalidDataException(string.Join(Environment.NewLine, errorStrings));
+        }
     }
+
     // Check job dates against their quotes; a duration must be stated in months, not calculated.
-    private void CheckExperience(List<Experience> experience)
+    private void CheckExperience(List<Experience> experiences)
     {
-        for (int index = 0; index < experience.Count; index++)
+        for (int indexInt = 0; indexInt < experiences.Count; indexInt++)
         {
-            Experience item = experience[index];
-            string path = $"/experience/{index}";
+            Experience itemExperience = experiences[indexInt];
+            string pathString = $"/experience/{indexInt}";
 
-            CheckEvidence(item.Evidence, path, item.Employer, item.Role, item.StartDate, item.EndDate);
+            CheckEvidence(itemExperience.Evidence, pathString, itemExperience.EmployerString, itemExperience.RoleString,
+                itemExperience.StartDateString, itemExperience.EndDateString);
 
-            CheckDates(item.StartDate, item.EndDate, path);
+            CheckDates(itemExperience.StartDateString, itemExperience.EndDateString, pathString);
 
-            if (item.DurationMonths is int months && !Regex.IsMatch
-                (item.Evidence.Quote, $@"\b{months}\s+months?\b", RegexOptions.IgnoreCase))
-                errors.Add($"{path}/durationMonths: duration must be explicitly stated in months, or null.");
+            if (itemExperience.DurationMonthsInt is int monthsInt && !Regex.IsMatch(itemExperience.Evidence.QuoteString, $@"\b{monthsInt}\s+months?\b", RegexOptions.IgnoreCase))
+            {
+                errorStrings.Add($"{pathString}/durationMonths: duration must be explicitly stated in months, or null.");
+            }
         }
     }
+
     // Check each education entry's facts and dates against its own resume quote.
-    private void CheckEducation(List<Education> education)
+    private void CheckEducation(List<Education> educations)
     {
-        for (int index = 0; index < education.Count; index++)
+        for (int indexInt = 0; indexInt < educations.Count; indexInt++)
         {
-            Education item = education[index];
-            string path = $"/education/{index}";
+            Education itemEducation = educations[indexInt];
+            string pathString = $"/education/{indexInt}";
 
-            CheckEvidence(item.Evidence, path,
-                item.Institution, item.Degree, item.FieldOfStudy, item.StartDate, item.EndDate);
+            CheckEvidence(itemEducation.Evidence, pathString, itemEducation.InstitutionString, itemEducation.DegreeString,
+                itemEducation.FieldOfStudyString, itemEducation.StartDateString, itemEducation.EndDateString);
 
-            CheckDates(item.StartDate, item.EndDate, path);
+            CheckDates(itemEducation.StartDateString, itemEducation.EndDateString, pathString);
         }
     }
+
     // A skill level must appear in the quote; otherwise it must stay null.
     private void CheckSkills(List<Skill> skills)
     {
-        for (int index = 0; index < skills.Count; index++)
-            CheckEvidence(skills[index].Evidence, $"/skills/{index}",
-                skills[index].Name, skills[index].Proficiency);
-    }
-    // Each item needs an exact resume quote that contains all of its known facts.
-    private void CheckEvidence(Evidence evidence, string path, params List<string?> facts)
-    {
-        if (evidence.Source != resumeFileName)
-            errors.Add($"{path}/evidence/source: expected the supplied CV filename.");
-
-        if (string.IsNullOrWhiteSpace(evidence.Quote) ||
-            !rawStringResume.Contains(evidence.Quote, StringComparison.Ordinal))
-            errors.Add($"{path}/evidence/quote: expected an exact, nonempty span of the CV.");
-
-        foreach (string? fact in facts)
-            if (fact is not null && (string.IsNullOrWhiteSpace(fact) ||
-                !evidence.Quote.Contains(fact.Trim(), StringComparison.OrdinalIgnoreCase)))
-                errors.Add($"{path}/evidence/quote: an extracted fact is absent from its evidence.");
-    }
-    // Reject an end date only when it is earlier than every possible start date.
-    private void CheckDates(string? start, string? end, string path)
-    {
-        var startRange = DateRange(start, path + "/startDate");
-        var endRange = DateRange(end, path + "/endDate");
-        if (startRange.HasValue && endRange.HasValue && endRange.Value.Max < startRange.Value.Min)
-            errors.Add($"{path}/endDate: end date precedes start date.");
-    }
-    // Treat a year or month as a date range so missing date parts stay unknown in the profile.
-    private (DateOnly Min, DateOnly Max)? DateRange(string? date, string path)
-    {
-        if (date is null) return null;
-        string fullDate = date.Length switch
-        { 4 => date + "-01-01", 7 => date + "-01", _ => date };
-
-        if (!Regex.IsMatch(date, @"^\d{4}(-\d{2})?(-\d{2})?$") ||
-            !DateOnly.TryParseExact(fullDate, "yyyy-MM-dd",
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly min))
+        for (int indexInt = 0; indexInt < skills.Count; indexInt++)
         {
-            errors.Add($"{path}: use a valid YYYY, YYYY-MM, or YYYY-MM-DD date, or null.");
+            CheckEvidence(skills[indexInt].Evidence, $"/skills/{indexInt}", skills[indexInt].NameString, skills[indexInt].ProficiencyString);
+        }
+    }
+
+    // Each item needs an exact resume quote that contains all of its known facts.
+    private void CheckEvidence(Evidence evidence, string pathString, params List<string?> factStrings)
+    {
+        if (evidence.SourceString != resumeFileNameString)
+        {
+            errorStrings.Add($"{pathString}/evidence/source: expected the supplied CV filename.");
+        }
+
+        if (string.IsNullOrWhiteSpace(evidence.QuoteString) ||
+            !rawStringResume.Contains(evidence.QuoteString, StringComparison.Ordinal))
+        {
+            errorStrings.Add($"{pathString}/evidence/quote: expected an exact, nonempty span of the CV.");
+        }
+
+        foreach (string? factString in factStrings)
+        {
+            if (factString is not null && (string.IsNullOrWhiteSpace(factString) ||
+                        !evidence.QuoteString.Contains(factString.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                errorStrings.Add($"{pathString}/evidence/quote: an extracted fact is absent from its evidence.");
+            }
+        }
+    }
+
+    // Reject an end date only when it is earlier than every possible start date.
+    private void CheckDates(string? startString, string? endString, string pathString)
+    {
+        var startRangeValueTuple = DateRange(startString, pathString + "/startDate");
+        var endRangeValueTuple = DateRange(endString, pathString + "/endDate");
+        if (startRangeValueTuple.HasValue && endRangeValueTuple.HasValue && endRangeValueTuple.Value.MaximumDateOnly < startRangeValueTuple.Value.MinimumDateOnly)
+        {
+            errorStrings.Add($"{pathString}/endDate: end date precedes start date.");
+        }
+    }
+
+    // Treat a year or month as a date range so missing date parts stay unknown in the profile.
+    private (DateOnly MinimumDateOnly, DateOnly MaximumDateOnly)? DateRange(string? dateString, string pathString)
+    {
+        if (dateString is null)
+        {
             return null;
         }
 
-        DateOnly max = date.Length switch
+        string fullDateString = dateString.Length switch
         {
-            4 => new(min.Year, 12, 31),
-            7 => new(min.Year, min.Month, DateTime.DaysInMonth(min.Year, min.Month)),
-            _ => min
+            4 => dateString + "-01-01",
+            7 => dateString + "-01",
+            _ => dateString
         };
 
-        return (min, max);
+        if (!Regex.IsMatch(dateString, @"^\d{4}(-\d{2})?(-\d{2})?$") ||
+            !DateOnly.TryParseExact(fullDateString, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None,
+                out DateOnly minDateOnly))
+        {
+            errorStrings.Add($"{pathString}: use a valid YYYY, YYYY-MM, or YYYY-MM-DD date, or null.");
+            return null;
+        }
+
+        DateOnly maxDateOnly = dateString.Length switch
+        {
+            4 => new(minDateOnly.Year, 12, 31),
+            7 => new(minDateOnly.Year, minDateOnly.Month, DateTime.DaysInMonth(minDateOnly.Year, minDateOnly.Month)),
+            _ => minDateOnly
+        };
+
+        return (minDateOnly, maxDateOnly);
     }
 }

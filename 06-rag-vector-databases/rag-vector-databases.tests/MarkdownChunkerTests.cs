@@ -10,7 +10,8 @@ public class MarkdownChunkerTests
     public void Chunking_preserves_source_bounds_overlap_and_repeatable_ids()
     {
         string paragraphString = new('x', 180);
-        List<SourceDocument> sourceDocuments = [new("project-a.md", $"# Project\n\n## Delivery\n\n{paragraphString}\n\n## Storage\n\nPostgreSQL work.")];
+        List<SourceDocument> sourceDocuments = [new("project-a.md",
+            $"# Project\n\n## Delivery\n\n{paragraphString}\n\n## Storage\n\nPostgreSQL work.")];
         List<DocumentChunk> documentChunks = MarkdownChunker.Chunk(sourceDocuments, 100, 20);
         Assert.Equal(documentChunks, MarkdownChunker.Chunk(sourceDocuments, 100, 20));
         Assert.Equal(3, documentChunks.Count);
@@ -28,8 +29,11 @@ public class MarkdownChunkerTests
     {
         List<DocumentChunk> documentChunks = await RagFixtures.LoadChunksAsync();
         Assert.Equal(6, documentChunks.Select(documentChunk => documentChunk.FilenameString).Distinct().Count());
-        Assert.Contains(documentChunks, documentChunk => documentChunk.FilenameString == "project-a.md" && documentChunk.TextString.Contains("Docker"));
-        Assert.Contains(documentChunks, documentChunk => documentChunk.FilenameString == "project-b.md" && documentChunk.TextString.Contains("PostgreSQL"));
-        Assert.DoesNotContain(documentChunks, documentChunk => documentChunk.TextString.Contains("Kubernetes", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(documentChunks,
+            documentChunk => documentChunk.FilenameString == "project-a.md" && documentChunk.TextString.Contains("Docker"));
+        Assert.Contains(documentChunks,
+            documentChunk => documentChunk.FilenameString == "project-b.md" && documentChunk.TextString.Contains("PostgreSQL"));
+        Assert.DoesNotContain(documentChunks,
+            documentChunk => documentChunk.TextString.Contains("Kubernetes", StringComparison.OrdinalIgnoreCase));
     }
 }

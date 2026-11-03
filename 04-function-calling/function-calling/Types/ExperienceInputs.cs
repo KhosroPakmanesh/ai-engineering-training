@@ -1,2 +1,6 @@
-// Keep the original dates so tool arguments can be checked against the supplied jobs.
-public sealed record ExperienceInputs(string Question, List<WorkInterval> Intervals, string? EvaluationDate);
+using System.Text.Json.Serialization;
+
+// Keep the original question, jobs, and explicit evaluation date together.
+public sealed record ExperienceInputs([property: JsonPropertyName("question")] string QuestionString,
+    [property: JsonPropertyName("intervals")] List<WorkInterval> WorkIntervals,
+    [property: JsonPropertyName("evaluationDate")] string? EvaluationDateString);

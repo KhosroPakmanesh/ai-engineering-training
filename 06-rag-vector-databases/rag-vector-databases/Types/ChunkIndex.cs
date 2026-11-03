@@ -1,8 +1,6 @@
 using System.Text.Json.Serialization;
 
 namespace ResumeRag;
-
-// Keep the original JSON field names while code members show their full data types.
-public sealed record ChunkIndex(
-    [property: JsonPropertyName("Metadata")] IndexMetadata IndexMetadata,
+// A complete stored snapshot contains metadata and its current indexed passages.
+public sealed record ChunkIndex([property: JsonPropertyName("Metadata")] IndexMetadata IndexMetadata,
     [property: JsonPropertyName("Chunks")] List<IndexedChunk> IndexedChunks);

@@ -1,8 +1,6 @@
 using System.Text.Json.Serialization;
 
 namespace ResumeRag;
-
-// Keep the original JSON field names while code members show their full data types.
-public sealed record Citation(
-    [property: JsonPropertyName("chunkId")] string ChunkIdString,
+// An accepted passage ID points back to its source filename.
+public sealed record Citation([property: JsonPropertyName("chunkId")] string ChunkIdString,
     [property: JsonPropertyName("source")] string SourceString);

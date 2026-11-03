@@ -1,34 +1,52 @@
 using Microsoft.Agents.AI;
 
-const string resumeFileName = "resume.md";
-const string resumeFile = $"SampleData/{resumeFileName}";
+const string resumeFileNameString = "resume.md";
+const string resumeFileString = $"SampleData/{resumeFileNameString}";
 
 try
 {
-    string folder = AppContext.BaseDirectory;
+    //------------------------------------------------------------------------//
+    //                              PREPARATION                               //
+    //------------------------------------------------------------------------//
 
-    // Read the resume beside the executable so the launch folder does not matter.
-    string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folder, resumeFile));
+    // 1. Resolve the copied inputs beside the executable.
+    string folderString = AppContext.BaseDirectory;
 
-    OutputPrinter.PrintIntroduction(resumeFileName);
+    // 2. Read the source before requesting a profile.
+    string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folderString, resumeFileString));
 
-    // The model proposes a JSON profile; local checks decide whether to accept it.
-    AgentResponse<CandidateProfile> response = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
+    // 3. Explain the source and acceptance checks.
+    OutputPrinter.PrintIntroduction(resumeFileNameString);
 
-    // Check JSON field names and value types before creating profile records.
-    JsonResumeSchemaValidator.ValidateSchema(response.Text);
+    //------------------------------------------------------------------------//
+    //                             MODEL REQUEST                              //
+    //------------------------------------------------------------------------//
 
-    // Result asks Agent Framework to convert the checked JSON into the profile records.
-    CandidateProfile profile = response.Result;
+    // 1. The model proposes a JSON profile; local checks decide whether to accept it.
+    AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(rawStringResume, resumeFileNameString);
 
-    // Correct JSON structure is not enough: each fact also needs an exact quote from the resume.
-    ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);
+    //------------------------------------------------------------------------//
+    //                      VALIDATION AND NORMALIZATION                      //
+    //------------------------------------------------------------------------//
 
-    // Trim skill names and remove duplicates only after their evidence has passed the checks.
-    profile = ProfileNormalizer.NormalizeProfile(profile);
+    // 1. Check JSON field names and value types before creating profile records.
+    JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
 
-    // Present only the profile that completed every required stage.
-    OutputPrinter.PrintProfile(profile);
+    // 2. Result asks Agent Framework to convert the checked JSON into the profile records.
+    CandidateProfile candidateProfile = agentResponse.Result;
+
+    // 3. Correct JSON structure is not enough: each fact also needs an exact quote from the resume.
+    ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, resumeFileNameString);
+
+    // 4. Trim skill names and remove duplicates only after their evidence has passed the checks.
+    CandidateProfile normalizedCandidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
+
+    //------------------------------------------------------------------------//
+    //                          RESULTS AND TAKEAWAY                          //
+    //------------------------------------------------------------------------//
+
+    // 1. Present only the profile that completed every required stage.
+    OutputPrinter.PrintProfile(normalizedCandidateProfile);
     OutputPrinter.PrintTakeaway();
 
     return 0;
@@ -38,8 +56,8 @@ catch (OperationCanceledException)
     Console.Error.WriteLine("The request was canceled or exceeded the 120-second time limit.");
     return 1;
 }
-catch (Exception error)
+catch (Exception errorException)
 {
-    Console.Error.WriteLine(error.Message);
+    Console.Error.WriteLine(errorException.Message);
     return 1;
 }

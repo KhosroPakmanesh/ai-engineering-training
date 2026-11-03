@@ -1,6 +1,6 @@
 # Prompt Engineering: one small experiment
 
-Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** lists the prompts and starts the comparison. **InputValidator.cs** checks the source files, **PromptComparer.cs** runs the loop and counts words, and **ResumeSummarizer.cs** creates a ChatClientAgent with the prompts and generation settings, calls RunAsync, and checks the final answer. **OutputPrinter.cs** explains the comparison, prints the summaries and counts, and gives the learner a next step.
+Prompt engineering means changing the instructions you give the AI to influence its answer. Here, the AI summarizes one fictional resume three times, with a different instruction each time. **Program.cs** shows loading, validation, preparation, comparison, and presentation in order. **ComparisonInputsLoader.cs** reads every file once, **InputValidator.cs** checks the complete comparison, and **PromptPreparer.cs** builds all three prompts before requests begin. **PromptComparer.cs** runs the comparison and counts words. **ResumeSummarizer.cs** constructs the native agent and checks its response. **OutputPrinter.cs** explains the lesson and prints numbered summaries.
 
 | Prompt file | Concept |
 | --- | --- |
@@ -12,25 +12,29 @@ All three requests also receive the same system instruction in ResumeSummarizer.
 
 ## Execution flow
 
-Follow the arrows from top to bottom. InputValidator.cs checks every input file before the loop starts. OutputPrinter.cs introduces what changes and what stays fixed. PromptComparer.cs then runs once for A, once for B, and once for C. ResumeSummarizer.cs reads the shared settings through SettingsReader.cs before each model request.
+Follow the arrows from top to bottom. Program.cs groups the lesson into preparation, comparison, and takeaway chapters, with numbered steps in each. All instructions and one resume snapshot are loaded and validated before PromptPreparer.cs builds every complete prompt. SettingsReader.cs reads the selected connection once before the comparison starts. Later requests receive only prepared text and that same ProviderSettings record; they do not reopen source files or settings.
 
 ```mermaid
 flowchart TD
-    A["Program.cs<br/>List prompts A, B and C"] --> B["InputValidator.cs<br/>Check the resume and all prompts"]
-    B --> P["OutputPrinter.cs<br/>Introduce the comparison and call count"]
-    P --> C["PromptComparer.cs + OutputPrinter.cs<br/>Choose and label the next prompt"]
-    C --> D["ResumeSummarizer.cs + SettingsReader.cs<br/>Read inputs and settings; create ChatClientAgent"]
-    D --> E["ResumeSummarizer.cs<br/>Call agent.RunAsync: one independent model call"]
-    E --> F["ResumeSummarizer.cs<br/>Check that the answer is nonempty and not cut short"]
-    F --> G["PromptComparer.cs + OutputPrinter.cs<br/>Count words and print the summary and count"]
-    G --> H{"More prompts?"}
-    H -->|Yes| C
-    H -->|No| I["OutputPrinter.cs<br/>Explain the takeaway after three model calls"]
+    A["Program.cs + ComparisonInputsLoader.cs<br/>Load the resume and all three instruction files once"] --> B{"InputValidator.cs<br/>Are all comparison inputs usable?"}
+    B -->|Yes| C["PromptPreparer.cs + SettingsReader.cs<br/>Prepare every prompt and read settings once"]
+    C --> D["OutputPrinter.cs<br/>Introduce the fixed inputs and three-call plan"]
+    D --> E["PromptComparer.cs + ResumeSummarizer.cs<br/>Send the next prepared prompt in an independent agent.RunAsync"]
+    E --> F{"ResumeSummarizer.cs<br/>Is the final answer nonempty and complete?"}
+    F -->|Yes| G["PromptComparer.cs + OutputPrinter.cs<br/>Count words and print a numbered summary block"]
+    G --> H{"More prepared prompts?"}
+    H -->|Yes| E
+    H -->|No| I["OutputPrinter.cs<br/>Explain the checks and suggest a prompt change"]
+    B -->|No| X["Program.cs<br/>Print the error and exit 1"]
+    F -->|No| X
+    E -->|API error| X
 ```
 
-Each pass uses the same resume, model, and settings with a fresh conversation. ResumeSummarizer.cs declares the system instruction, temperature, and output limit in ChatOptions. It asks [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs) for an IChatClient, creates a ChatClientAgent, and calls RunAsync with the prompt plus resume. The framework sends the instruction as a system message and the prompt plus resume as a user message. Earlier summaries are not sent to the next request. ResumeSummarizer.cs checks the native finish reason and final assistant text, rejecting an empty or cut-short answer. A linked CancellationTokenSource covers the complete RunAsync call. A missing input, failed request, or rejected response stops the program before the later prompts run.
+PromptFile records name input files. PromptCase records hold loaded instructions, ComparisonInputs keeps them beside the shared resume, and PreparedPrompt records contain the complete request text. Each public record has its own file under Types/. Preparation makes zero model requests.
 
-The [shared retry policy](../../shared/shared/Providers/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside one agent call. It keeps the same prompt and settings; the comparison loop advances only after a usable answer.
+ResumeSummarizer.cs declares the system instruction, temperature, and output limit in ChatOptions. It gets an IChatClient from [AiClientFactory.cs](../../shared/shared/AiClientFactory.cs), constructs a ChatClientAgent, and calls RunAsync directly. Each request starts a fresh conversation with the same system instruction and its own prepared user prompt. A linked CancellationTokenSource covers the complete call and its HTTP retries. Native finish-reason and final-text checks reject empty or cut-short answers before word counting.
+
+The [shared retry policy](../../shared/shared/Providers/AiRetryPolicy.cs) can resend a temporary HTTP failure twice inside one agent call. It keeps the same prepared prompt and settings. Input failures stop before the first request; request or response failures stop before later cases run.
 
 ## Run
 
@@ -52,13 +56,13 @@ Configure an available chat model for the selected provider. If you see HTTP 429
 
 Use a model that supports chat completions and the requested settings. If a request fails, the program prints the error and any available provider details. After changing `shared/shared/.env`, stop any running debugging session and rebuild so the program receives the new settings.
 
-Some reasoning models spend output tokens on thinking as well as on the final answer. A short summary can therefore need more than 200 output tokens. The program rejects an empty answer or one cut short by the output limit. InputValidator.cs checks every prompt file before the comparison starts, so missing inputs are found early. SettingsReader.cs checks the shared settings when ResumeSummarizer.cs prepares each request. See [OpenRouter's explanation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#reasoning-tokens-and-max_tokens).
+Some reasoning models spend output tokens on thinking as well as on the final answer. A short summary can therefore need more than 200 output tokens. The program rejects an empty answer or one cut short by the output limit. The loader reads every prompt file and InputValidator.cs checks all loaded instructions before the comparison starts, so missing inputs are found early. Program.cs reads and checks the shared settings once before the first request. See [OpenRouter's explanation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#reasoning-tokens-and-max_tokens).
 
 ## Understand the results
 
 OutputPrinter.cs introduces the three prompt styles and prints each summary under its prompt name, followed by the word count calculated in PromptComparer.cs. Compare A, B, and C with the same resume. All three requests ask for one paragraph; C also asks for at most 70 words. The final takeaway reminds you to check facts against the resume and try changing one prompt.
 
-Green headings separate the stages in an interactive terminal; model details and word counts appear in grey. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels and answers.
+Green headings separate stages, white dividers number summaries from 1, cyan identifies each prompt, and dark yellow identifies word counts. Model details appear in grey. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels and answers.
 
 A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy will send the same request again. No retry message appears when the first attempt succeeds. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results) for delays and failures after the attempt limit.
 
@@ -74,8 +78,14 @@ The word counter splits text at spaces, tabs, and line breaks. It helps you chec
 ## Files to read
 
 ```text
-Program.cs                                    Prompt list and main execution flow
-InputValidator.cs                             Source-file checks before the comparison
+Program.cs                                    Explicit preparation, comparison, and takeaway chapters
+ComparisonInputsLoader.cs                     Read every source file once
+PromptPreparer.cs                             Build all complete prompts before paid work
+Types/PromptFile.cs                            Named input file
+Types/PromptCase.cs                            Loaded instruction with its label and filename
+Types/ComparisonInputs.cs                      One resume snapshot and every comparison case
+Types/PreparedPrompt.cs                        Complete immutable request text
+InputValidator.cs                             Validate the complete loaded comparison
 PromptComparer.cs                             Comparison loop and word counts
 OutputPrinter.cs                              Introduction, labelled summaries, and learning takeaway
 ResumeSummarizer.cs                           Native agent, prompts, settings, and independent RunAsync call
@@ -94,18 +104,21 @@ resume.md                                     The fictional source
 prompt-engineering.csproj                     .NET 10 project, copied inputs, and shared reference
 ```
 
-Start by reading Program.cs from top to bottom. Follow its calls to InputValidator.cs and PromptComparer.cs, then read the request in ResumeSummarizer.cs. Run the comparison and use the printed summaries and word counts to see how the three instructions affect the answer.
+Start with Program.cs and follow loading, validation, prompt preparation, and comparison in order. Then read the native request in ResumeSummarizer.cs. Run the comparison and use the printed summaries and word counts to see how the three instructions affect the answer.
 
 ## Tests
 
-The solution includes `prompt-engineering.tests`, a small [xUnit project](https://xunit.net/docs/getting-started/v2/getting-started) with five cases. Each test file matches the source file it checks.
+The xUnit project contains **14 cases: 11 deterministic cases and three integration cases**. Counterpart files own the behavior they check.
 
 | Test file | Checks |
 | --- | --- |
-| [InputValidatorTests.cs](../prompt-engineering.tests/InputValidatorTests.cs) | Two local cases reject missing and empty prompts before any request. |
-| [ResumeSummarizerTests.cs](../prompt-engineering.tests/ResumeSummarizerTests.cs) | Three integration cases check a nonempty paragraph and the constrained prompt's word limit. |
+| [ComparisonInputsLoaderTests.cs](../prompt-engineering.tests/ComparisonInputsLoaderTests.cs) | A missing later prompt fails during loading. |
+| [InputValidatorTests.cs](../prompt-engineering.tests/InputValidatorTests.cs) | Empty resumes and later empty instructions are rejected. |
+| [PromptPreparerTests.cs](../prompt-engineering.tests/PromptPreparerTests.cs) | Every prompt contains its original instruction and the same unchanged resume. |
+| [PromptComparerTests.cs](../prompt-engineering.tests/PromptComparerTests.cs) | Invalid later inputs send zero HTTP requests; prepared cases produce three independent native requests. |
+| [ResumeSummarizerTests.cs](../prompt-engineering.tests/ResumeSummarizerTests.cs) | Scripted HTTP checks empty/truncated answers and cancellation. Three live cases check paragraph format and C's 70-word limit. |
 
-Before each integration request, the tests call `InputValidator.ValidateInputsAsync` for all three prompt files, matching the application's preparation step. A missing or empty later prompt therefore stops the test before its first paid request. The tests then call `ResumeSummarizer.SummarizeAsync` and use the same settings, resume, and prompts copied into the test output folder through the project reference. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+TestData/PromptTestData.cs supplies fresh copied inputs and completes the same loading, validation, and preparation steps as Program.cs. SummaryResponseHandler.cs replaces only HTTP for local checks. Every integration case prepares the entire comparison before selecting its one request. Shared configuration and transport checks remain in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 
@@ -113,6 +126,6 @@ From the repository root, run:
 dotnet test 01-prompt-engineering/prompt-engineering.tests/prompt-engineering.tests.csproj
 ```
 
-You can also use Visual Studio's Test Explorer. A complete test run makes **three model calls**, normally three real HTTP requests and up to **nine HTTP attempts** with retries. The integration cases require a nonempty summary with no blank lines between paragraphs; C must also stay within 70 words. The summaries and word counts appear in test output. Missing settings or API errors fail the tests. A busy provider can cause a failure even when the code is working, and a model can miss a formatting rule on a later run. Read the answers yourself to judge factual accuracy and whether the examples influenced their style.
+Visual Studio's Test Explorer runs the same cases. Deterministic cases make zero real API requests. A complete project run makes **three real model calls**, normally three HTTP requests and at most **nine HTTP attempts**. Integration tests require a nonempty paragraph; C must also contain at most 70 words. Missing settings, API errors, and rejected model output fail the tests. Read the summaries yourself to judge factual accuracy and useful fact selection.
 
 References: [Microsoft Agent Framework model providers](https://learn.microsoft.com/en-us/agent-framework/integrations/by-component/model-providers/openai), [official OpenAI .NET SDK](https://github.com/openai/openai-dotnet), [OpenRouter Chat Completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), and [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).

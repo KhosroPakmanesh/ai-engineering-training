@@ -6,8 +6,9 @@ namespace ResumeRag;
 public static class OutputPrinter
 {
     // Explain costs and boundaries before the first remote request.
-    public static void PrintIntroduction(ProviderSettings embeddingProviderSettings, ProviderSettings chatProviderSettings, string storeString,
-        List<SourceDocument> sourceDocuments, List<RagQuestion> ragQuestions, int chunksInt, int changedInt, int topKInt, double minimumScoreDouble)
+    public static void PrintIntroduction(ProviderSettings embeddingProviderSettings, ProviderSettings chatProviderSettings,
+        string storeString, List<SourceDocument> sourceDocuments, List<RagQuestion> ragQuestions, int chunksInt, int changedInt,
+        int topKInt, double minimumScoreDouble)
     {
         PrintHeading("RAG: retrieve passages, then answer with citations");
         Console.WriteLine(
@@ -15,9 +16,9 @@ public static class OutputPrinter
             "Follow each question through retrieval, evidence checks, and an answer with source citations.");
         PrintColoredLine(
             $"\nStore: {storeString}\n" +
-            $"Provider: {chatProviderSettings.Name}\n" +
-            $"Chat model: {chatProviderSettings.Model}\n" +
-            $"Embedding model: {embeddingProviderSettings.Model}",
+            $"Provider: {chatProviderSettings.NameString}\n" +
+            $"Chat model: {chatProviderSettings.ModelString}\n" +
+            $"Embedding model: {embeddingProviderSettings.ModelString}",
             ConsoleColor.Gray);
 
         PrintHeading("\nSource documents and questions");
@@ -72,8 +73,7 @@ public static class OutputPrinter
             PrintColoredLine($"\n── Candidate {indexInt + 1} ──────────────────────────", ConsoleColor.White);
             PrintColoredLine($"SOURCE  | [{candidateRetrievedChunk.DocumentChunk.ChunkIdString}]", ConsoleColor.Cyan);
             PrintColoredLine($"COSINE  | {candidateRetrievedChunk.ScoreDouble:F4}", ConsoleColor.DarkYellow);
-            PrintColoredLine(
-                $"CONTEXT | {(includedBool ? "INCLUDED in the answer context" : "EXCLUDED from the answer context")}",
+            PrintColoredLine($"CONTEXT | {(includedBool ? "INCLUDED in the answer context" : "EXCLUDED from the answer context")}",
                 includedBool ? ConsoleColor.Cyan : ConsoleColor.DarkYellow);
             Console.WriteLine(
                 $"Heading: {candidateRetrievedChunk.DocumentChunk.HeadingString}\nPassage:\n{candidateRetrievedChunk.DocumentChunk.TextString}");
@@ -81,9 +81,7 @@ public static class OutputPrinter
 
         if (preparedAnswer.SelectedRetrievedChunks.Count == 0)
         {
-            PrintColoredLine(
-                "\nEVIDENCE CHECK: no passages admitted. Chat will be skipped for this question.",
-                ConsoleColor.DarkYellow);
+            PrintColoredLine("\nEVIDENCE CHECK: no passages admitted. Chat will be skipped for this question.", ConsoleColor.DarkYellow);
         }
         else
         {
@@ -114,8 +112,7 @@ public static class OutputPrinter
             RagResult ragResult = ragResults[indexInt];
             PrintColoredLine($"\n── Answer {indexInt + 1} ─────────────────────────────", ConsoleColor.White);
             PrintColoredLine($"QUESTION | {ragResult.QuestionString}", ConsoleColor.Cyan);
-            PrintColoredLine(
-                $"STATUS   | {ragResult.StatusString}",
+            PrintColoredLine($"STATUS   | {ragResult.StatusString}",
                 ragResult.StatusString == "answered" ? ConsoleColor.Cyan : ConsoleColor.DarkYellow);
             Console.WriteLine($"Answer:\n{ragResult.AnswerString}");
 
@@ -131,9 +128,7 @@ public static class OutputPrinter
                     PrintColoredLine($"  [{citation.ChunkIdString}] -> {citation.SourceString}", ConsoleColor.Cyan);
                 }
 
-                PrintColoredLine(
-                    "Citation check: passed; every cited ID belongs to a passage supplied to this answer.",
-                    ConsoleColor.Gray);
+                PrintColoredLine("Citation check: passed; every cited ID belongs to a passage supplied to this answer.", ConsoleColor.Gray);
             }
         }
 

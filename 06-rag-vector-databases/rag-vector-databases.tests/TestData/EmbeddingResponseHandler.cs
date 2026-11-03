@@ -7,7 +7,10 @@ public sealed class EmbeddingResponseHandler(string responseJsonString, bool hol
 {
     private readonly TaskCompletionSource _requestStartedTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public List<string> RequestBodyStrings { get; } = [];
-    public bool HadCancelableTokenBool { get; private set; }
+    public bool HadCancelableTokenBool
+    {
+        get; private set;
+    }
     public Task RequestStartedTask => _requestStartedTaskCompletionSource.Task;
 
     // Replace HTTP only. Waiting for cancellation lets tests coordinate an active native request without sleeps.
@@ -17,7 +20,14 @@ public sealed class EmbeddingResponseHandler(string responseJsonString, bool hol
         RequestBodyStrings.Add(await httpRequestMessage.Content!.ReadAsStringAsync(cancellationToken));
         HadCancelableTokenBool = cancellationToken.CanBeCanceled;
         _requestStartedTaskCompletionSource.TrySetResult();
-        if (holdResponseBool) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        return new(HttpStatusCode.OK) { Content = new StringContent(responseJsonString, Encoding.UTF8, "application/json") };
+        if (holdResponseBool)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        return new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJsonString, Encoding.UTF8, "application/json")
+        };
     }
 }

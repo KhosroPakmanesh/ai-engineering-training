@@ -16,7 +16,11 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
         }
 
         using var sqliteConnection = new SqliteConnection(new SqliteConnectionStringBuilder
-            { DataSource = pathString, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        {
+            DataSource = pathString,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString());
         await sqliteConnection.OpenAsync(cancellationToken);
         using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
         using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
@@ -34,10 +38,13 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
         using (var sqliteDataReader = await sqliteCommand.ExecuteReaderAsync(cancellationToken))
         {
             while (await sqliteDataReader.ReadAsync(cancellationToken))
-                indexedChunks.Add(new(JsonSerializer.Deserialize<DocumentChunk>(sqliteDataReader.GetString(0))
-                    ?? throw new InvalidDataException("Invalid stored chunk."),
+            {
+                indexedChunks.Add(new(
+                    JsonSerializer.Deserialize<DocumentChunk>(sqliteDataReader.GetString(0))
+                                ?? throw new InvalidDataException("Invalid stored chunk."),
                     JsonSerializer.Deserialize<List<float>>(sqliteDataReader.GetString(1))
-                    ?? throw new InvalidDataException("Invalid stored vector.")));
+                                ?? throw new InvalidDataException("Invalid stored vector.")));
+            }
         }
 
         sqliteTransaction.Commit();
@@ -49,7 +56,10 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
     public async Task SynchronizeAsync(ChunkIndex chunkIndex, CancellationToken cancellationToken = default)
     {
         using var sqliteConnection = new SqliteConnection(new SqliteConnectionStringBuilder
-            { DataSource = pathString, Pooling = false }.ToString());
+        {
+            DataSource = pathString,
+            Pooling = false
+        }.ToString());
 
         await sqliteConnection.OpenAsync(cancellationToken);
         using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
@@ -86,8 +96,7 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
     }
 
     // SQLite persists the vectors; this small collection is scanned exactly in C#.
-    public async Task<List<RetrievedChunk>> SearchAsync(List<float> queryFloats, int topKInt,
-        CancellationToken cancellationToken = default)
+    public async Task<List<RetrievedChunk>> SearchAsync(List<float> queryFloats, int topKInt, CancellationToken cancellationToken = default)
     {
         ChunkIndex chunkIndex = await ReadAsync(cancellationToken)
             ?? throw new InvalidDataException("Ingest documents before searching.");
@@ -102,5 +111,7 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
     }
 
     // Connections belong to individual operations and are closed before the next stage.
-    public void Dispose() { }
+    public void Dispose()
+    {
+    }
 }

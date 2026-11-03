@@ -1,18 +1,27 @@
 public static class VectorValidator
 {
     // Zero, nonfinite, or differently sized vectors cannot be used for this cosine comparison.
-    public static void Validate(ReadOnlySpan<float> vector, int expectedDimensions)
+    public static void Validate(ReadOnlySpan<float> vectorReadOnlySpan, int expectedDimensionsInt)
     {
-        if (expectedDimensions <= 0 || vector.Length != expectedDimensions)
-            throw new InvalidDataException("Embedding vector dimensions do not match.");
-
-        double squaredLength = 0;
-        foreach (float value in vector)
+        if (expectedDimensionsInt <= 0 || vectorReadOnlySpan.Length != expectedDimensionsInt)
         {
-            if (!float.IsFinite(value)) throw new InvalidDataException("Embedding vectors must contain only finite numbers.");
-            squaredLength += (double)value * value;
+            throw new InvalidDataException("Embedding vector dimensions do not match.");
         }
 
-        if (squaredLength == 0) throw new InvalidDataException("An embedding vector must not be a zero vector.");
+        double squaredLengthDouble = 0;
+        foreach (float valueFloat in vectorReadOnlySpan)
+        {
+            if (!float.IsFinite(valueFloat))
+            {
+                throw new InvalidDataException("Embedding vectors must contain only finite numbers.");
+            }
+
+            squaredLengthDouble += (double)valueFloat * valueFloat;
+        }
+
+        if (squaredLengthDouble == 0)
+        {
+            throw new InvalidDataException("An embedding vector must not be a zero vector.");
+        }
     }
 }

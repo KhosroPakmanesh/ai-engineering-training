@@ -63,7 +63,9 @@ public static class InputsValidator
         {
             if (string.IsNullOrWhiteSpace(ragQuestion.SkillString) || ragQuestion.SkillString.Length > 60 ||
                 ragQuestion.TextString != $"Where did I use {ragQuestion.SkillString}?")
+            {
                 errorStrings.Add("Questions: use 'Where did I use {skill}?' and a skill name of 1-60 characters.");
+            }
         }
     }
 

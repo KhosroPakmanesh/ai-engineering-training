@@ -30,9 +30,8 @@ public static class IndexPreparer
 
         return new(
             indexMetadata,
-            documentChunks.Select(documentChunk => new IndexedChunk
-                (documentChunk, availableIndexedChunksByIdDictionary[documentChunk.ChunkIdString].VectorFloats)
-            )
+            documentChunks.Select(
+                documentChunk => new IndexedChunk(documentChunk, availableIndexedChunksByIdDictionary[documentChunk.ChunkIdString].VectorFloats))
             .ToList());
     }
 }

@@ -2,45 +2,49 @@ using Microsoft.Extensions.AI;
 
 public sealed class AiClientFactory
 {
-    private readonly Dictionary<string, IAiProviderStrategy> _providers;
+    private readonly Dictionary<string, IAiProviderStrategy> _iAiProviderStrategiesDictionary;
     public const int RequestTimeoutSeconds = 120;
     public const int MaxRetries = AiRetryPolicy.MaxRetries;
 
     // Construct only lightweight strategies here; unused providers need no client or credentials.
     public AiClientFactory()
     {
-        _providers = new(StringComparer.OrdinalIgnoreCase)
+        List<IAiProviderStrategy> registeredIAiProviderStrategies =
+        [
+            new OpenRouterProvider(),
+            new GeminiProvider()
+        ];
+        _iAiProviderStrategiesDictionary = new(StringComparer.OrdinalIgnoreCase);
+        foreach (IAiProviderStrategy iAiProviderStrategy in registeredIAiProviderStrategies)
         {
-            ["OpenRouter"] = new OpenRouterProvider(),
-            ["Gemini"] = new GeminiProvider()
-        };
+            _iAiProviderStrategiesDictionary.Add(iAiProviderStrategy.NameString, iAiProviderStrategy);
+        }
     }
 
     // Keep selection here while each strategy owns its connection and provider-specific behavior.
-    public IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient = null)
+    public IChatClient CreateClient(ProviderSettings providerSettings, HttpClient? httpClient = null)
     {
-        return SelectProvider(settings.Name).CreateClient(settings, httpClient);
+        return SelectProvider(providerSettings.NameString).CreateClient(providerSettings, httpClient);
     }
 
     // Lessons use Microsoft's common embedding interface while provider SDK details stay internal.
-    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator
-        (ProviderSettings settings, HttpClient? httpClient = null)
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings providerSettings, HttpClient? httpClient = null)
     {
-        return SelectProvider(settings.Name).CreateEmbeddingGenerator(settings, httpClient);
+        return SelectProvider(providerSettings.NameString).CreateEmbeddingGenerator(providerSettings, httpClient);
     }
 
     // Configuration and client creation use the same registrations and supported provider names.
-    internal IAiProviderStrategy SelectProvider(string name)
+    internal IAiProviderStrategy SelectProvider(string nameString)
     {
-        if (!_providers.TryGetValue(name, out IAiProviderStrategy? provider))
+        if (!_iAiProviderStrategiesDictionary.TryGetValue(nameString, out IAiProviderStrategy? selectedIAiProviderStrategy))
         {
-            string supportedProviders = string.Join(" or ", 
-                _providers.Keys.Select(providerName => providerName.ToLowerInvariant()));
+            string supportedProvidersString = string.Join(" or ",
+                _iAiProviderStrategiesDictionary.Keys.Select(providerNameString => providerNameString.ToLowerInvariant()));
 
             throw new InvalidOperationException(
-                $"Set AI_PROVIDER to {supportedProviders} in shared/shared/.env, then rebuild. No requests were made.");
+                $"Set AI_PROVIDER to {supportedProvidersString} in shared/shared/.env, then rebuild. No requests were made.");
         }
 
-        return provider;
+        return selectedIAiProviderStrategy;
     }
 }

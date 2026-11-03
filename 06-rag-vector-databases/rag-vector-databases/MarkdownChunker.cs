@@ -32,8 +32,9 @@ public static class MarkdownChunker
                     string sectionString = string.Join("\n", sectionLinesStrings).Trim();
                     foreach (string textString in SplitSection(sectionString, maximumCharactersInt, overlapInt))
                     {
-                        documentChunks.Add(new($"{sourceDocument.FilenameString}#chunk-{++numberInt:00}",
-                            sourceDocument.FilenameString, headingString, textString, hashString));
+                        documentChunks.Add(new(ChunkIdString: $"{sourceDocument.FilenameString}#chunk-{++numberInt:00}",
+                            FilenameString: sourceDocument.FilenameString, HeadingString: headingString, TextString: textString,
+                            DocumentHashString: hashString));
                     }
 
                     sectionLinesStrings.Clear();
@@ -48,12 +49,11 @@ public static class MarkdownChunker
 
         if (documentChunks.Count == 0 || documentChunks.Count > 500)
         {
-            throw new InvalidDataException
-                ("Documents must produce 1-500 nonempty chunks before embedding.");
+            throw new InvalidDataException("Documents must produce 1-500 nonempty chunks before embedding.");
         }
 
         return documentChunks;
-   }
+    }
 
     // Prefer a paragraph end, then a word boundary; a hard cut also handles a single oversized word.
     private static List<string> SplitSection(string textString, int maximumCharactersInt, int overlapInt)
@@ -65,8 +65,7 @@ public static class MarkdownChunker
             int endInt = Math.Min(startInt + maximumCharactersInt, textString.Length);
             if (endInt < textString.Length)
             {
-                int paragraphInt = textString.LastIndexOf
-                    ("\n\n", endInt - 1, endInt - startInt, StringComparison.Ordinal);
+                int paragraphInt = textString.LastIndexOf("\n\n", endInt - 1, endInt - startInt, StringComparison.Ordinal);
                 int spaceInt = textString.LastIndexOf(' ', endInt - 1, endInt - startInt);
                 if (paragraphInt > startInt + overlapInt)
                 {

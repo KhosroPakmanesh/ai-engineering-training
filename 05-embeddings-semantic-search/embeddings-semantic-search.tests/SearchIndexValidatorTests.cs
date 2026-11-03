@@ -6,15 +6,15 @@ public class SearchIndexValidatorTests
     [Theory]
     [InlineData("Test", "other-model")]
     [InlineData("Other", "model")]
-    public void Different_models_or_providers_are_rejected(string provider, string model)
+    public void Different_models_or_providers_are_rejected(string providerString, string modelString)
     {
         var searchIndex = new SearchIndex("Test", "model", 2, [new(new("P1", "Docker service", ["Docker"]), [1, 0])]);
         SearchIndexValidator.Validate(searchIndex);
 
-        InvalidDataException error = Assert.Throws<InvalidDataException>(() =>
-            SearchIndexValidator.ValidateCompatibility(searchIndex, provider, model, [1, 0]));
+        InvalidDataException errorInvalidDataException = Assert.Throws<InvalidDataException>(() =>
+            SearchIndexValidator.ValidateCompatibility(searchIndex, providerString, modelString, [1, 0]));
 
-        Assert.Contains("same provider and embedding model", error.Message);
+        Assert.Contains("same provider and embedding model", errorInvalidDataException.Message);
     }
 
     // A valid query response can still have a different size from the saved collection.
@@ -25,10 +25,10 @@ public class SearchIndexValidatorTests
         SearchIndexValidator.Validate(searchIndex);
         VectorValidator.Validate([1, 0, 0], 3);
 
-        InvalidDataException error = Assert.Throws<InvalidDataException>(() =>
+        InvalidDataException errorInvalidDataException = Assert.Throws<InvalidDataException>(() =>
             SearchIndexValidator.ValidateCompatibility(searchIndex, "Test", "model", [1, 0, 0]));
 
-        Assert.Contains("query vector dimensions", error.Message);
+        Assert.Contains("query vector dimensions", errorInvalidDataException.Message);
     }
 
     // Stored dimension metadata must agree with every vector.
@@ -36,8 +36,8 @@ public class SearchIndexValidatorTests
     public void Corrupt_stored_dimensions_are_rejected()
     {
         var searchIndex = new SearchIndex("Test", "model", 3, [new(new("P1", "Docker service", ["Docker"]), [1, 0])]);
-        InvalidDataException error = Assert.Throws<InvalidDataException>(() => SearchIndexValidator.Validate(searchIndex));
-        Assert.Contains("dimensions", error.Message);
+        InvalidDataException errorInvalidDataException = Assert.Throws<InvalidDataException>(() => SearchIndexValidator.Validate(searchIndex));
+        Assert.Contains("dimensions", errorInvalidDataException.Message);
     }
 
     // Dot-product ranking requires the stored vectors to have length one.
@@ -45,7 +45,7 @@ public class SearchIndexValidatorTests
     public void Unnormalized_stored_vectors_are_rejected()
     {
         var searchIndex = new SearchIndex("Test", "model", 2, [new(new("P1", "Docker service", ["Docker"]), [3, 4])]);
-        InvalidDataException error = Assert.Throws<InvalidDataException>(() => SearchIndexValidator.Validate(searchIndex));
-        Assert.Contains("normalized", error.Message);
+        InvalidDataException errorInvalidDataException = Assert.Throws<InvalidDataException>(() => SearchIndexValidator.Validate(searchIndex));
+        Assert.Contains("normalized", errorInvalidDataException.Message);
     }
 }

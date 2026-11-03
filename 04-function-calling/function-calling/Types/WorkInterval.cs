@@ -1,2 +1,5 @@
-// Keep the original dates so tool arguments can be checked against the supplied jobs.
-public sealed record WorkInterval(string StartDate, string? EndDate);
+using System.Text.Json.Serialization;
+
+// A source job has complete ISO dates; a missing end date means the current role.
+public sealed record WorkInterval([property: JsonPropertyName("startDate")] string StartDateString,
+    [property: JsonPropertyName("endDate")] string? EndDateString);

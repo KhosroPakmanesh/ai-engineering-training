@@ -2,7 +2,6 @@ using CommunityToolkit.VectorData.SqliteVec;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.VectorData;
 using Xunit;
-using VectorProject = SemanticSearch.VectorProject;
 
 public class SemanticSearchTests
 {
@@ -10,8 +9,11 @@ public class SemanticSearchTests
     [Fact]
     public void Cosine_orders_all_documents_and_respects_top_k()
     {
-        var searchIndex = new SearchIndex("Test", "model", 2,
-        [
+        var searchIndex = new SearchIndex(
+            "Test",
+            "model",
+            2,
+            [
             new(new("P3", "Opposite project", ["Other"]), [-1, 0]),
             new(new("P2", "Perpendicular project", ["Other"]), [0, 1]),
             new(new("P1", "Closest project", ["Docker"]), [1, 0])
@@ -19,11 +21,11 @@ public class SemanticSearchTests
         SearchIndexValidator.Validate(searchIndex);
         SearchIndexValidator.ValidateCompatibility(searchIndex, "Test", "model", [1, 0]);
 
-        List<SearchResult> results = SemanticSearch.Rank(searchIndex, [1, 0], 10);
+        List<SearchResult> searchResults = SemanticSearch.Rank(searchIndex, [1, 0], 10);
 
-        Assert.Equal(new[] { "P1", "P2", "P3" }, results.Select(result => result.DocumentId));
-        Assert.Equal(new[] { 1d, 0d, -1d }, results.Select(result => result.Score));
-        Assert.Equal(new[] { 1, 2, 3 }, results.Select(result => result.Rank));
+        Assert.Equal(new[] { "P1", "P2", "P3" }, searchResults.Select(searchResult => searchResult.DocumentIdString));
+        Assert.Equal(new[] { 1d, 0d, -1d }, searchResults.Select(searchResult => searchResult.ScoreDouble));
+        Assert.Equal(new[] { 1, 2, 3 }, searchResults.Select(searchResult => searchResult.RankInt));
         Assert.Single(SemanticSearch.Rank(searchIndex, [1, 0], 1));
     }
 
@@ -31,30 +33,32 @@ public class SemanticSearchTests
     [Fact]
     public void Semantic_and_keyword_search_can_choose_different_projects()
     {
-        List<ProjectDescription> projects =
+        List<ProjectDescription> projectDescriptions =
         [
             new("P1", "Shipped web services using Docker images.", ["Docker"]),
             new("P2", "Proofread the phrase containerized APIs in a glossary.", ["Proofreading"])
         ];
-        SearchInputsValidator.Validate(projects, "containerized APIs", 1);
-        var searchIndex = new SearchIndex("Test", "model", 2,
-            [new(projects[0], [1, 0]), new(projects[1], [0, 1])]);
+        SearchInputsValidator.Validate(projectDescriptions, "containerized APIs", 1);
+        var searchIndex = new SearchIndex("Test", "model", 2, [new(projectDescriptions[0], [1, 0]), new(projectDescriptions[1], [0, 1])]);
         SearchIndexValidator.Validate(searchIndex);
         SearchIndexValidator.ValidateCompatibility(searchIndex, "Test", "model", [1, 0]);
 
-        Assert.Equal("P1", Assert.Single(SemanticSearch.Rank(searchIndex, [1, 0], 1)).DocumentId);
-        Assert.Equal("P2", Assert.Single(LexicalSearch.Rank(projects, "containerized APIs", 1)).DocumentId);
+        Assert.Equal("P1", Assert.Single(SemanticSearch.Rank(searchIndex, [1, 0], 1)).DocumentIdString);
+        Assert.Equal("P2", Assert.Single(LexicalSearch.Rank(projectDescriptions, "containerized APIs", 1)).DocumentIdString);
     }
 
     // A real local connector checks distance conversion and metadata filters without calling an embedding model.
     [Fact]
     public async Task Vector_store_filters_provider_and_model_and_returns_cosine_similarity()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"vector-search-{Guid.NewGuid():N}.sqlite");
+        string pathString = Path.Combine(Path.GetTempPath(), $"vector-search-{Guid.NewGuid():N}.sqlite");
         try
         {
-            var searchIndex = new SearchIndex("Test", "model", 2,
-            [
+            var searchIndex = new SearchIndex(
+                "Test",
+                "model",
+                2,
+                [
                 new(new("P3", "Opposite project", ["Other"]), [-1, 0]),
                 new(new("P2", "Perpendicular project", ["Other"]), [0, 1]),
                 new(new("P1", "Closest project", ["Docker"]), [1, 0])
@@ -62,71 +66,71 @@ public class SemanticSearchTests
             SearchIndexValidator.Validate(searchIndex);
             SearchIndexValidator.ValidateCompatibility(searchIndex, "Test", "model", [4, 0]);
 
-            var connectionSettings = new SqliteConnectionStringBuilder { DataSource = path, Pooling = false };
-            using var store = new SqliteVectorStore(connectionSettings.ToString());
-            var definition = new VectorStoreCollectionDefinition
+            var connectionSqliteConnectionStringBuilder = new SqliteConnectionStringBuilder { DataSource = pathString, Pooling = false };
+            using var sqliteVectorStore = new SqliteVectorStore(connectionSqliteConnectionStringBuilder.ToString());
+            var vectorStoreCollectionDefinition = new VectorStoreCollectionDefinition
             {
                 Properties =
                 [
-                    new VectorStoreKeyProperty(nameof(VectorProject.Id), typeof(string)),
-                    new VectorStoreDataProperty(nameof(VectorProject.Text), typeof(string)),
-                    new VectorStoreDataProperty(nameof(VectorProject.Provider), typeof(string)),
-                    new VectorStoreDataProperty(nameof(VectorProject.Model), typeof(string)),
-                    new VectorStoreVectorProperty(nameof(VectorProject.Vector), typeof(ReadOnlyMemory<float>), 2)
+                    new VectorStoreKeyProperty(nameof(VectorProject.IdString), typeof(string)),
+                    new VectorStoreDataProperty(nameof(VectorProject.TextString), typeof(string)),
+                    new VectorStoreDataProperty(nameof(VectorProject.ProviderString), typeof(string)),
+                    new VectorStoreDataProperty(nameof(VectorProject.ModelString), typeof(string)),
+                    new VectorStoreVectorProperty(nameof(VectorProject.VectorReadOnlyMemory), typeof(ReadOnlyMemory<float>), 2)
                     {
                         DistanceFunction = DistanceFunction.CosineDistance
                     }
                 ]
             };
-            using VectorStoreCollection<string, VectorProject> collection =
-                store.GetCollection<string, VectorProject>("projects", definition);
-            await collection.EnsureCollectionDeletedAsync();
-            await collection.EnsureCollectionExistsAsync();
+            using VectorStoreCollection<string, VectorProject> vectorStoreCollection =
+                sqliteVectorStore.GetCollection<string, VectorProject>("projects", vectorStoreCollectionDefinition);
+            await vectorStoreCollection.EnsureCollectionDeletedAsync();
+            await vectorStoreCollection.EnsureCollectionExistsAsync();
 
-            var records = new List<VectorProject>();
-            foreach (IndexedProject indexedProject in searchIndex.Projects)
+            var vectorProjects = new List<VectorProject>();
+            foreach (IndexedProject indexedProject in searchIndex.IndexedProjects)
             {
-                records.Add(new VectorProject
+                vectorProjects.Add(new VectorProject
                 {
-                    Id = indexedProject.Project.Id,
-                    Text = indexedProject.Project.Text,
-                    Provider = searchIndex.Provider,
-                    Model = searchIndex.Model,
-                    Vector = indexedProject.Vector.ToArray()
+                    IdString = indexedProject.ProjectDescription.IdString,
+                    TextString = indexedProject.ProjectDescription.TextString,
+                    ProviderString = searchIndex.ProviderString,
+                    ModelString = searchIndex.ModelString,
+                    VectorReadOnlyMemory = indexedProject.VectorFloats.ToArray()
                 });
             }
 
             // These vectors point at the query but belong to a different embedding space and must be excluded.
-            records.Add(new VectorProject
+            vectorProjects.Add(new VectorProject
             {
-                Id = "WrongProvider",
-                Text = "Other provider",
-                Provider = "Other",
-                Model = "model",
-                Vector = new float[] { 1, 0 }
+                IdString = "WrongProvider",
+                TextString = "Other provider",
+                ProviderString = "Other",
+                ModelString = "model",
+                VectorReadOnlyMemory = new float[] { 1, 0 }
             });
-            records.Add(new VectorProject
+            vectorProjects.Add(new VectorProject
             {
-                Id = "WrongModel",
-                Text = "Other model",
-                Provider = "Test",
-                Model = "other-model",
-                Vector = new float[] { 1, 0 }
+                IdString = "WrongModel",
+                TextString = "Other model",
+                ProviderString = "Test",
+                ModelString = "other-model",
+                VectorReadOnlyMemory = new float[] { 1, 0 }
             });
-            await collection.UpsertAsync(records);
+            await vectorStoreCollection.UpsertAsync(vectorProjects);
 
             // Cosine distance also accepts a query whose length is not one.
-            List<SearchResult> results = await SemanticSearch.RankAsync(collection, searchIndex, new float[] { 4, 0 }, 10);
+            List<SearchResult> searchResults = await SemanticSearch.RankAsync(vectorStoreCollection, searchIndex, new float[] { 4, 0 }, 10);
 
-            Assert.Equal(new[] { "P1", "P2", "P3" }, results.Select(result => result.DocumentId));
-            Assert.Equal(new[] { 1d, 0d, -1d }, results.Select(result => result.Score));
-            Assert.Equal(new[] { 1, 2, 3 }, results.Select(result => result.Rank));
-            Assert.Equal("P1", Assert.Single(
-                await SemanticSearch.RankAsync(collection, searchIndex, new float[] { 4, 0 }, 1)).DocumentId);
+            Assert.Equal(new[] { "P1", "P2", "P3" }, searchResults.Select(searchResult => searchResult.DocumentIdString));
+            Assert.Equal(new[] { 1d, 0d, -1d }, searchResults.Select(searchResult => searchResult.ScoreDouble));
+            Assert.Equal(new[] { 1, 2, 3 }, searchResults.Select(searchResult => searchResult.RankInt));
+            Assert.Equal("P1",
+                Assert.Single(await SemanticSearch.RankAsync(vectorStoreCollection, searchIndex, new float[] { 4, 0 }, 1)).DocumentIdString);
         }
         finally
         {
-            File.Delete(path);
+            File.Delete(pathString);
         }
     }
 }

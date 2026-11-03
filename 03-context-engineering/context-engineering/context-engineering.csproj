@@ -8,5 +8,6 @@
   <ItemGroup>
     <None Update="SampleData/**/*" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../shared/shared/shared.csproj" />
+    <InternalsVisibleTo Include="context-engineering.tests" />
   </ItemGroup>
 </Project>

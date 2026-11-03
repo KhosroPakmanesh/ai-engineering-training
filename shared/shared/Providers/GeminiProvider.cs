@@ -4,61 +4,88 @@ using Microsoft.Extensions.AI;
 
 internal sealed class GeminiProvider : IAiProviderStrategy
 {
-    public string Name => "Gemini";
-    public string SettingsPrefix => "GEMINI";
-    public Uri Endpoint { get; } = new("https://generativelanguage.googleapis.com/v1beta/openai/");
+    public string NameString => "Gemini";
+    public string SettingsPrefixString => "GEMINI";
+    public Uri EndpointUri { get; } = new("https://generativelanguage.googleapis.com/v1beta/openai/");
 
     // Google's compatibility endpoint needs no OpenRouter routing options.
-    public IChatClient CreateClient(ProviderSettings settings, HttpClient? httpClient) =>
-        OpenAiCompatibleClient.CreateClient(settings, httpClient);
+    public IChatClient CreateClient(ProviderSettings providerSettings, HttpClient? httpClient)
+    {
+        return OpenAiCompatibleClient.CreateClient(providerSettings, httpClient);
+    }
 
     // Keep Google's omitted-zero convention below Microsoft's common embedding interface.
-    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings settings, HttpClient? httpClient) =>
-        OpenAiCompatibleClient.CreateEmbeddingGenerator(settings, httpClient, new OmittedZeroIndexPolicy());
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings providerSettings, HttpClient? httpClient)
+    {
+        return OpenAiCompatibleClient.CreateEmbeddingGenerator(providerSettings, httpClient, new OmittedZeroIndexPolicy());
+    }
 
     // Gemini can omit a numeric zero in its JSON. Restore only that unambiguous default, never guess document order.
     private sealed class OmittedZeroIndexPolicy : PipelinePolicy
     {
         // Keep the same wire convention when the SDK is called synchronously.
-        public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        public override void Process(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies, int currentIndexInt)
         {
-            ProcessNext(message, pipeline, currentIndex);
-            RestoreZeroIndex(message);
+            ProcessNext(pipelineMessage, pipelinePolicies, currentIndexInt);
+            RestoreZeroIndex(pipelineMessage);
         }
 
         // Apply the convention after HTTP completes and before the SDK reads the vectors.
-        public override async ValueTask ProcessAsync(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        public override async ValueTask ProcessAsync(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies,
+            int currentIndexInt)
         {
-            await ProcessNextAsync(message, pipeline, currentIndex);
-            RestoreZeroIndex(message);
+            await ProcessNextAsync(pipelineMessage, pipelinePolicies, currentIndexInt);
+            RestoreZeroIndex(pipelineMessage);
         }
 
         // All positive indexes must be present exactly once before one omitted index can mean zero.
-        private static void RestoreZeroIndex(PipelineMessage message)
+        private static void RestoreZeroIndex(PipelineMessage pipelineMessage)
         {
-            PipelineResponse? response = message.Response;
-            if (response is null || response.Status != 200 || !message.BufferResponse) return;
-            JsonNode? body = JsonNode.Parse(response.Content);
-            if (body?["data"] is not JsonArray data || data.Count == 0) return;
-            JsonObject? missingZero = null;
-            var positiveIndexes = new HashSet<int>();
-            foreach (JsonNode? entry in data)
+            PipelineResponse? pipelineResponse = pipelineMessage.Response;
+            if (pipelineResponse is null || pipelineResponse.Status != 200 || !pipelineMessage.BufferResponse)
             {
-                if (entry is not JsonObject item) return;
-                if (!item.ContainsKey("index"))
-                {
-                    if (missingZero is not null) return;
-                    missingZero = item;
-                }
-                else if (item["index"] is not JsonValue index || !index.TryGetValue(out int position) ||
-                    position <= 0 || position >= data.Count || !positiveIndexes.Add(position))
-                    return;
+                return;
             }
-            if (missingZero is null || positiveIndexes.Count != data.Count - 1) return;
-            missingZero["index"] = 0;
-            response.ContentStream?.Dispose();
-            response.ContentStream = BinaryData.FromString(body!.ToJsonString()).ToStream();
-            response.BufferContent(message.CancellationToken);
+
+            JsonNode? bodyJsonNode = JsonNode.Parse(pipelineResponse.Content);
+            if (bodyJsonNode?["data"] is not JsonArray dataJsonArray || dataJsonArray.Count == 0)
+            {
+                return;
+            }
+
+            JsonObject? missingZeroJsonObject = null;
+            var positiveIndexeIntsHashSet = new HashSet<int>();
+            foreach (JsonNode? entryJsonNode in dataJsonArray)
+            {
+                if (entryJsonNode is not JsonObject itemJsonObject)
+                {
+                    return;
+                }
+
+                if (!itemJsonObject.ContainsKey("index"))
+                {
+                    if (missingZeroJsonObject is not null)
+                    {
+                        return;
+                    }
+
+                    missingZeroJsonObject = itemJsonObject;
+                }
+                else if (itemJsonObject["index"] is not JsonValue indexJsonValue || !indexJsonValue.TryGetValue(out int positionInt) ||
+                    positionInt <= 0 || positionInt >= dataJsonArray.Count || !positiveIndexeIntsHashSet.Add(positionInt))
+                {
+                    return;
+                }
+            }
+            if (missingZeroJsonObject is null || positiveIndexeIntsHashSet.Count != dataJsonArray.Count - 1)
+            {
+                return;
+            }
+
+            missingZeroJsonObject["index"] = 0;
+            pipelineResponse.ContentStream?.Dispose();
+            pipelineResponse.ContentStream = BinaryData.FromString(bodyJsonNode!.ToJsonString()).ToStream();
+            pipelineResponse.BufferContent(pipelineMessage.CancellationToken);
         }
     }
 }

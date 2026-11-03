@@ -11,11 +11,11 @@ For the default question, `Which project used PostgreSQL?`, FULL supplies projec
 
 ## Execution flow
 
-Follow the arrows from top to bottom. Program.cs checks the question, calls ComparisonInputsLoader.cs to load the source files, and asks ContextCreator.cs to prepare both prompts. ProjectSectionParser.cs parses the document into sections, each with an ID, heading, and complete text. The two preparation calls are beside each other in `CreateContextStrategies`: FULL keeps every section, and SELECTED ranks and chooses matching sections. Both prompts are checked before Program.cs calls `CompareContextAsync` in ContextComparer.cs. For each context, that method creates a ChatClientAgent, declares the instructions and generation settings in ChatOptions, and calls RunAsync with the prepared prompt. It sends FULL first and SELECTED second and returns the report. Each call uses an independent conversation with the same question, instructions, model, and settings.
+Follow the arrows from top to bottom. Program.cs calls ComparisonInputsValidator.cs to check the question, calls ComparisonInputsLoader.cs to load the source files, and asks ContextCreator.cs to prepare both prompts. ProjectSectionParser.cs parses the document into sections, each with an ID, heading, and complete text. The two preparation calls are beside each other in `CreateContextStrategies`: FULL keeps every section, and SELECTED ranks and chooses matching sections. Both prompts are checked before Program.cs calls `CompareContextAsync` in ContextComparer.cs. Its comparison loop calls RequestAsync, which constructs the native agent, declares ChatOptions, and returns AgentResponse. The loop then reads the answer, checks citations and evidence, and constructs the result in separate visible steps. It sends FULL first and SELECTED second and returns the report. Each call uses an independent conversation with the same question, instructions, model, and settings.
 
 ```mermaid
 flowchart TD
-    A["Program.cs<br/>Choose and check the question"] --> B["ComparisonInputsLoader.cs + ProjectSectionParser.cs<br/>Read project descriptions and expected source IDs"]
+    A["Program.cs + ComparisonInputsValidator.cs<br/>Choose and check the question"] --> B["ComparisonInputsLoader.cs + ProjectSectionParser.cs<br/>Read project descriptions and expected source IDs"]
     B --> C["FullContextStrategy.cs<br/>Prepare FULL with all descriptions"]
     C --> S["SelectedContextStrategy.cs<br/>Rank and choose descriptions for SELECTED"]
     S --> D["ContextCreator.cs<br/>Build and size-check both prompts"]
@@ -29,7 +29,7 @@ flowchart TD
     I -->|Yes| K["Exit 1<br/>The flagged results remain in console output"]
 ```
 
-FullContextStrategy.cs keeps all sections in their original document order. SelectedContextStrategy.cs uses the question to choose a smaller set. Both return a `ContextStrategy` record containing the strategy name, included sections, and their combined text. ContextCreator.cs joins the section text without rewriting it and rejects a context that exceeds the size limit. It then builds each prompt and pairs it with its context in a `PreparedContext` record. The preparation files make no model requests.
+FullContextStrategy.cs keeps all sections in their original document order. SelectedContextStrategy.cs uses the question to choose a smaller set. Both return a `ContextStrategy` record containing the strategy name, included sections, and their combined text. ContextCreator.cs joins the section text without rewriting it and rejects a context that exceeds the size limit. It then builds each prompt and pairs it with its context in a `PreparedContext` record. The preparation files make no model requests. Every public record has its own Types/ file. Explicit JSON names retain the original report fields after C# member renames.
 
 Ranking helps SELECTED choose the descriptions most likely to contain the answer. When several match, it gives the strongest matches priority within the two-description limit. SelectedContextStrategy.cs keeps the keyword and ranking rules together. It ignores common question words such as `which` and `project`. Each remaining distinct word scores 3 points for a heading match, otherwise 1 point for a match in the description. The code adds each project's points and selects up to two with positive scores, highest first. For `Which project used PostgreSQL?`, P1 ranks highest because PostgreSQL appears in its heading. Equal scores follow the original document order. If no words match, SELECTED contains no descriptions. This is local word matching and makes no extra model requests.
 
@@ -59,7 +59,7 @@ Each context can contain at most 8,000 characters. The complete prompt, includin
 
 OutputPrinter.cs prints both answers with the supplied project IDs, prompt sizes, token estimates, provider token counts when available, request times, source recall, and evidence flags. A flag is a message showing that an evidence check failed. Flagged results are printed for inspection, and the program exits with code 1. An API failure stops the comparison before the final results are printed. The application does not save a report file; integration tests serialize the ComparisonReport records into test output.
 
-Green headings separate the stages; cyan labels FULL and dark yellow labels SELECTED. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels, measurements, and flags. The final takeaway explains measurement limits and asks whether SELECTED kept the evidence needed for the answer.
+Green headings separate stages and white dividers number answers from 1. Cyan labels the supplied context and accepted source IDs; failed checks and insufficient evidence use dark yellow. The shared ConsoleOutput.cs helper restores the original console colour after each message. Redirected output stays plain text, with the same labels, measurements, and flags. Answers that pass evidence checks have a separate accepted-citation list containing their original source text. Flagged answers remain visible without being labelled accepted. The final takeaway explains measurement limits and asks whether SELECTED retained the needed evidence.
 
 A message such as `HTTP 503. Retry 1/2 in 2.3 seconds.` means the shared policy will send the same request again. No retry message appears when the first attempt succeeds. Measured request time includes retries and waits; provider token counts describe the returned answer, not the failed attempts. See the [shared retry explanation](../../shared/shared/README.md#understand-the-results) for delays and failures after the attempt limit.
 
@@ -71,7 +71,7 @@ A citation such as `[P1]` or `【P1】` points to a project description. Context
 
 1. Read [the fictional projects](SampleData/projects.md). Predict which description the AI needs to answer `Which project used PostgreSQL?`.
 2. Run the program. FULL should contain P1-P6 and SELECTED should contain only P1. Compare the answers, their supporting quotes, the prompt sizes, and the request times. Both requests have the description needed to answer the question.
-3. Change `question` at the top of Program.cs to `Which project used Kubernetes?` and run again. Then try `Which project used Salesforce?`. None of the descriptions mention Salesforce, so both answers should be `I don't have enough evidence to answer this question.`
+3. Change `questionString` at the top of Program.cs to `Which project used Kubernetes?` and run again. Then try `Which project used Salesforce?`. None of the descriptions mention Salesforce, so both answers should be `I don't have enough evidence to answer this question.`
 4. Change one project description or the selection rule in SelectedContextStrategy.cs and run again. Each run makes another two model calls, with up to six HTTP attempts. Observe which descriptions are selected and how the answer changes.
 
 ## Files to read
@@ -79,6 +79,7 @@ A citation such as `[P1]` or `【P1】` points to a project description. Context
 ```text
 Program.cs                                    Main comparison flow and selected question
 OutputPrinter.cs                              Context explanations, result measurements, flags, and takeaway
+ComparisonInputsValidator.cs                  Shared question validation before preparation
 ComparisonInputsLoader.cs                     Source loading and expected project IDs
 ProjectSectionParser.cs                       Markdown headings, section text, and unique IDs
 ContextCreator.cs                             Context text, prompt packaging, and size limits
@@ -91,7 +92,10 @@ Types/ComparisonInputs.cs                     Question, source sections, and exp
 Types/ContextStrategy.cs                      Strategy name, included sections, and context text
 Types/PreparedContext.cs                      Context paired with its complete user prompt
 Types/ProjectSection.cs                       Parsed source ID, heading, and original text
-Types/ComparisonReport.cs                     Fixture, measurements, and comparison report records
+Types/ComparisonReport.cs                     Fixed settings and both context results
+Types/QuestionFixture.cs                      Expected supporting project IDs
+Types/TokenUsage.cs                           Nullable provider token counts
+Types/ContextResult.cs                        One answer, measurements, and evidence flags
 ../../shared/shared/SettingsReader.cs         Shared provider selection and settings parsing
 ../../shared/shared/AiClientFactory.cs        Provider client construction and compatibility
 ../../shared/shared/ConsoleOutput.cs          Shared headings and terminal colour handling
@@ -105,11 +109,11 @@ SampleData/questions.json                    Expected source IDs and an unsuppor
 context-engineering.csproj                    .NET 10 project, copied inputs, and shared reference
 ```
 
-Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RunContextAsync` creates an agent and calls RunAsync once, and `CreateResult` names each measurement beside its value. Use the console output to compare the answers, input sizes, and timings. AI dependencies are pinned in [shared.csproj](../../shared/shared/shared.csproj). Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
+Start with Program.cs and follow its loading, preparation, and comparison calls. Read FullContextStrategy.cs and SelectedContextStrategy.cs side by side to see what changes between the contexts. The `ScoreSection` loop shows how each keyword contributes points. In ProjectSectionParser.cs, `ParseProjectSection` keeps heading checks, section reading, and duplicate-ID checks together. ContextCreator.cs prepares both contexts in `CreateContextStrategies`; its `PrepareContext` method builds and checks both prompts. Then read `CompareContextAsync` in ContextComparer.cs: `RequestAsync` creates an agent and returns its native response from one RunAsync call, and `CreateResult` names each measurement beside its value. Use the console output to compare the answers, input sizes, and timings. AI dependencies are pinned in [shared.csproj](../../shared/shared/shared.csproj). Tests use `Microsoft.NET.Test.Sdk` 18.11.0, `xunit` 2.9.3, and `xunit.runner.visualstudio` 4.0.1.
 
 ## Tests
 
-The solution includes `context-engineering.tests`, a small xUnit project with twelve cases: ten local cases and two integration cases. Test files mirror the source names and folders, including the `ContextStrategies/` folder.
+The solution includes `context-engineering.tests`, a small xUnit project with nineteen cases: seventeen deterministic cases and two integration cases. Test files mirror the source names and folders, including the `ContextStrategies/` folder.
 
 | Test file | Checks |
 | --- | --- |
@@ -118,9 +122,10 @@ The solution includes `context-engineering.tests`, a small xUnit project with tw
 | [ProjectSectionParserTests.cs](../context-engineering.tests/ProjectSectionParserTests.cs) | Duplicate source IDs are rejected. |
 | [ContextCreatorTests.cs](../context-engineering.tests/ContextCreatorTests.cs) | Both prompts retain the original question and source text; the complete prompt cap also catches JSON escaping overhead. |
 | [ContextEvidenceCheckerTests.cs](../context-engineering.tests/ContextEvidenceCheckerTests.cs) | Unknown, excluded, and missing citations, exact quotes, and the explicit uncertainty response. |
-| [ContextComparerTests.cs](../context-engineering.tests/ContextComparerTests.cs) | Two real comparisons check evidence, uncertainty, source recall, and prompt sizes. |
+| [ComparisonInputsValidatorTests.cs](../context-engineering.tests/ComparisonInputsValidatorTests.cs) | Empty and oversized questions fail at the shared lesson boundary. |
+| [ContextComparerTests.cs](../context-engineering.tests/ContextComparerTests.cs) | Local native requests check independent conversations, the original question, missing usage, response completeness, preserved report JSON fields, and validation preventing HTTP. Two live comparisons check evidence, uncertainty, recall, and prompt sizes. |
 
-The integration tests load and prepare the inputs before calling `ContextComparer.CompareContextAsync`, just like the console app, and use the same settings and sample files copied into the test output folder through the project reference. [ContextTestData.cs](../context-engineering.tests/TestData/ContextTestData.cs) reads fresh local fixtures from those copied files. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
+The integration tests validate the question, load all inputs, and prepare both prompts before calling `ContextComparer.CompareContextAsync`, just like the console app, and use the same settings and sample files copied into the test output folder through the project reference. [ContextTestData.cs](../context-engineering.tests/TestData/ContextTestData.cs) reads fresh local fixtures from those copied files. Common provider configuration and client behavior are tested separately in [shared.tests](../../shared/shared.tests/shared.tests.csproj).
 
 From the repository root, run:
 

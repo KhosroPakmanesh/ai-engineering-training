@@ -6,8 +6,8 @@ namespace ResumeRag;
 public static class EvidenceSelector
 {
     // A named skill must occur in the passage itself; nearby vector directions alone are not evidence.
-    public static PreparedAnswer Prepare(RagQuestion ragQuestion, List<RetrievedChunk> candidateRetrievedChunks,
-        double minimumScoreDouble, int contextLimitInt)
+    public static PreparedAnswer Prepare(RagQuestion ragQuestion, List<RetrievedChunk> candidateRetrievedChunks, double minimumScoreDouble,
+        int contextLimitInt)
     {
         var selectedRetrievedChunks = new List<RetrievedChunk>();
         var passageJsonStrings = new List<string>();

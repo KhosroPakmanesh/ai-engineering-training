@@ -10,7 +10,10 @@ public class IndexPreparerTests
     public void Preparation_reuses_unchanged_vectors_updates_metadata_and_removes_missing_ids()
     {
         ChunkIndex previousChunkIndex = RagFixtures.CreateIndex();
-        DocumentChunk updatedDocumentChunk = previousChunkIndex.IndexedChunks[0].DocumentChunk with { DocumentHashString = "new-hash" };
+        DocumentChunk updatedDocumentChunk = previousChunkIndex.IndexedChunks[0].DocumentChunk with
+        {
+            DocumentHashString = "new-hash"
+        };
         List<DocumentChunk> sourcesDocumentChunks = [updatedDocumentChunk];
         Assert.Empty(IndexPreparer.FindChanged(sourcesDocumentChunks, previousChunkIndex));
         ChunkIndex mergedChunkIndex = IndexPreparer.Merge(previousChunkIndex.IndexMetadata, sourcesDocumentChunks, previousChunkIndex, []);

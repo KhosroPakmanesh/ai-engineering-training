@@ -1,8 +1,13 @@
-public record QuestionFixture(string Question, List<string> ExpectedSectionIds);
-public record TokenUsage(long? InputTokens, long? OutputTokens, long? TotalTokens);
-public record ContextResult(string Strategy, List<string> IncludedSectionIds, int ContextCharacters,
-    int PromptCharacters, int EstimatedPromptTokens, TokenUsage? ProviderUsage,
-    long LatencyMilliseconds, double? SourceRecall, string Response, List<string> CitedSectionIds, List<string> EvidenceFlags);
-public record ComparisonReport(string Question, string SourceFile, string Model, float Temperature,
-    int MaxOutputTokens, int ContextCharacterCap, int PromptCharacterCap, string FullStrategy,
-    string SelectedStrategy, string TokenEstimateMethod, List<ContextResult> Results);
+using System.Text.Json.Serialization;
+
+// The report records fixed settings and both independent context results.
+public record ComparisonReport([property: JsonPropertyName("question")] string QuestionString,
+    [property: JsonPropertyName("sourceFile")] string SourceFileString, [property: JsonPropertyName("model")] string ModelString,
+    [property: JsonPropertyName("temperature")] float TemperatureFloat,
+    [property: JsonPropertyName("maxOutputTokens")] int MaxOutputTokensInt,
+    [property: JsonPropertyName("contextCharacterCap")] int ContextCharacterCapInt,
+    [property: JsonPropertyName("promptCharacterCap")] int PromptCharacterCapInt,
+    [property: JsonPropertyName("fullStrategy")] string FullStrategyString,
+    [property: JsonPropertyName("selectedStrategy")] string SelectedStrategyString,
+    [property: JsonPropertyName("tokenEstimateMethod")] string TokenEstimateMethodString,
+    [property: JsonPropertyName("results")] List<ContextResult> ContextResults);

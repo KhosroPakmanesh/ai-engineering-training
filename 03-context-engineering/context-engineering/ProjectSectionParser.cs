@@ -4,25 +4,28 @@ public static class ProjectSectionParser
 {
 
     // Keep each project's full text so its quotes can be checked against the original.
-    public static List<ProjectSection> ParseProjectSection(string markdown)
+    public static List<ProjectSection> ParseProjectSection(string markdownString)
     {
-        MatchCollection headings = Regex.Matches(markdown,
-            @"^## \[(?<id>P[1-9]\d*)\] (?<heading>[^\r\n]+)\r?$", RegexOptions.Multiline);
-        if (headings.Count == 0 || headings.Count != Regex.Matches(markdown, @"^## ", RegexOptions.Multiline).Count)
-            throw new InvalidDataException("Each project section needs a heading such as '## [P1] Inventory service'.");
-
-        var sections = new List<ProjectSection>();
-        for (int index = 0; index < headings.Count; index++)
+        MatchCollection headingsMatchCollection = Regex.Matches(markdownString, @"^## \[(?<id>P[1-9]\d*)\] (?<heading>[^\r\n]+)\r?$",
+            RegexOptions.Multiline);
+        if (headingsMatchCollection.Count == 0 || headingsMatchCollection.Count != Regex.Matches(markdownString, @"^## ", RegexOptions.Multiline).Count)
         {
-            Match heading = headings[index];
-            int end = index + 1 < headings.Count ? headings[index + 1].Index : markdown.Length;
-            sections.Add(new(heading.Groups["id"].Value, heading.Groups["heading"].Value,
-                markdown[heading.Index..end].Trim()));
+            throw new InvalidDataException("Each project section needs a heading such as '## [P1] Inventory service'.");
         }
 
-        List<ProjectSection> projectSections = sections.ToList();
-        if (projectSections.Select(section => section.Id).Distinct(StringComparer.Ordinal).Count() != projectSections.Count)
+        var projectSections = new List<ProjectSection>();
+        for (int indexInt = 0; indexInt < headingsMatchCollection.Count; indexInt++)
+        {
+            Match headingMatch = headingsMatchCollection[indexInt];
+            int endInt = indexInt + 1 < headingsMatchCollection.Count ? headingsMatchCollection[indexInt + 1].Index : markdownString.Length;
+            projectSections.Add(new(headingMatch.Groups["id"].Value, headingMatch.Groups["heading"].Value,
+                markdownString[headingMatch.Index..endInt].Trim()));
+        }
+
+        if (projectSections.Select(projectSection => projectSection.IdString).Distinct(StringComparer.Ordinal).Count() != projectSections.Count)
+        {
             throw new InvalidDataException("Project section IDs must be unique.");
+        }
 
         return projectSections;
     }

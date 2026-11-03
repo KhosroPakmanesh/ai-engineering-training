@@ -21,6 +21,7 @@ public class CitationValidatorTests
     public void Supplied_citation_is_accepted()
     {
         const string answerString = "Mira packaged an API [project-a.md#chunk-01].";
-        CitationValidator.Validate(answerString, CitationParser.Parse(answerString), [new(RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk, 0.9)]);
+        CitationValidator.Validate(answerString, CitationParser.Parse(answerString),
+            [new(RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk, 0.9)]);
     }
 }

@@ -4,24 +4,82 @@ using Microsoft.Extensions.AI;
 using Xunit;
 using Xunit.Abstractions;
 
-public class CvExtractorTests(ITestOutputHelper output)
+public class CvExtractorTests(ITestOutputHelper outputITestOutputHelper)
 {
+    // Exercise the real request and every acceptance stage with a known fictional response.
+    [Fact]
+    public async Task Native_request_preserves_the_authored_schema_and_passes_the_complete_pipeline()
+    {
+        string resumeString = ProfileTestData.ReadSample("resume.md");
+        using var profileResponseHandler = new ProfileResponseHandler(ProfileTestData.ReadSample("profile.example.json"));
+        using var httpClient = new HttpClient(profileResponseHandler);
+        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(resumeString, "resume.md",
+            new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient);
+        JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
+        CandidateProfile candidateProfile = agentResponse.Result;
+        ProfileValidator.ValidateProfile(candidateProfile, resumeString, "resume.md");
+        CandidateProfile normalizedCandidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
+        // Member names may change in C# while the displayed JSON must still satisfy the authored schema.
+        JsonResumeSchemaValidator.ValidateSchema(JsonSerializer.Serialize(normalizedCandidateProfile, JsonSerializerOptions.Web));
+        Assert.Equal("Mira Example", normalizedCandidateProfile.NameString);
+        using JsonDocument requestJsonDocument = JsonDocument.Parse(Assert.Single(profileResponseHandler.RequestBodyStrings));
+        JsonElement schemaJsonElement = requestJsonDocument.RootElement.GetProperty("response_format").GetProperty("json_schema");
+        using JsonDocument authoredJsonDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
+        Assert.True(JsonElement.DeepEquals(authoredJsonDocument.RootElement, schemaJsonElement.GetProperty("schema")));
+        Assert.True(schemaJsonElement.GetProperty("strict").GetBoolean());
+    }
+
+    // A successful HTTP response still needs complete assistant text before schema validation.
+    [Theory]
+    [InlineData("", "stop", "no response text")]
+    [InlineData("{}", "length", "truncated")]
+    public async Task Native_request_rejects_empty_and_truncated_answers(string answerString, string finishReasonString, string expectedErrorString)
+    {
+        using var profileResponseHandler = new ProfileResponseHandler(answerString, finishReasonString);
+        using var httpClient = new HttpClient(profileResponseHandler);
+        InvalidDataException invalidDataException = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            CvExtractor.ExtractAsync(ProfileTestData.ReadSample("resume.md"), "resume.md",
+                new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient));
+        Assert.Contains(expectedErrorString, invalidDataException.Message);
+        Assert.Single(profileResponseHandler.RequestBodyStrings);
+    }
+
+    // Native cancellation must reach the HTTP boundary and stop an already canceled caller locally.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Caller_cancellation_stops_the_extractor(bool cancelBeforeBool)
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        using var profileResponseHandler = new ProfileResponseHandler("{}", beforeResponseAction: cancellationTokenSource.Cancel);
+        using var httpClient = new HttpClient(profileResponseHandler);
+        if (cancelBeforeBool)
+        {
+            cancellationTokenSource.Cancel();
+        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CvExtractor.ExtractAsync(ProfileTestData.ReadSample("resume.md"), "resume.md",
+                new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient,
+                cancellationTokenSource.Token));
+        Assert.Equal(cancelBeforeBool ? 0 : 1, profileResponseHandler.RequestBodyStrings.Count);
+    }
+
     // A local fixture checks the post-request stages without credentials or a model call.
     [Fact]
     public void Example_response_passes_schema_conversion_evidence_and_normalization()
     {
         string rawStringResume = ProfileTestData.ReadSample("resume.md");
-        string jsonResume = ProfileTestData.ReadSample("profile.example.json");
-        var rawResponse = new AgentResponse(new ChatMessage(ChatRole.Assistant, jsonResume));
-        var response = new AgentResponse<CandidateProfile>(rawResponse, JsonSerializerOptions.Web);
+        string jsonResumeString = ProfileTestData.ReadSample("profile.example.json");
+        var rawAgentResponse = new AgentResponse(new ChatMessage(ChatRole.Assistant, jsonResumeString));
+        var agentResponse = new AgentResponse<CandidateProfile>(rawAgentResponse, JsonSerializerOptions.Web);
 
-        Assert.Equal(jsonResume, response.Text);
-        JsonResumeSchemaValidator.ValidateSchema(response.Text);
-        CandidateProfile profile = response.Result;
-        ProfileValidator.ValidateProfile(profile, rawStringResume, "resume.md");
-        profile = ProfileNormalizer.NormalizeProfile(profile);
-        Assert.Equal("Mira Example", profile.Name);
-        Assert.Equal(2, profile.Experience.Count);
+        Assert.Equal(jsonResumeString, agentResponse.Text);
+        JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
+        CandidateProfile candidateProfile = agentResponse.Result;
+        ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, "resume.md");
+        candidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
+        Assert.Equal("Mira Example", candidateProfile.NameString);
+        Assert.Equal(2, candidateProfile.Experiences.Count);
     }
 
     // Model responses pass through the same local checks and cleanup as Program.cs.
@@ -29,49 +87,56 @@ public class CvExtractorTests(ITestOutputHelper output)
     [InlineData("resume.md", false)]
     [InlineData("resume-ambiguous.md", true)]
     [Trait("Category", "Integration")]
-    public async Task Extract_returns_a_typed_profile_and_preserves_unknowns(string resumeFileName, bool hasMissingFacts)
+    public async Task Extract_returns_a_typed_profile_and_preserves_unknowns(string resumeFileNameString, bool hasMissingFactsBool)
     {
-        string rawStringResume = ProfileTestData.ReadSample(resumeFileName);
-        AgentResponse<CandidateProfile> response = await CvExtractor.ExtractAsync(rawStringResume, resumeFileName);
-        JsonResumeSchemaValidator.ValidateSchema(response.Text);
-        CandidateProfile profile = response.Result;
-        ProfileValidator.ValidateProfile(profile, rawStringResume, resumeFileName);
-        profile = ProfileNormalizer.NormalizeProfile(profile);
+        string rawStringResume = ProfileTestData.ReadSample(resumeFileNameString);
+        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(rawStringResume, resumeFileNameString);
+        JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
+        CandidateProfile candidateProfile = agentResponse.Result;
+        ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, resumeFileNameString);
+        candidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
 
-        JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-        output.WriteLine(JsonSerializer.Serialize(profile, jsonOptions));
+        JsonSerializerOptions jsonSerializerOptions = new(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        };
+        outputITestOutputHelper.WriteLine(JsonSerializer.Serialize(candidateProfile, jsonSerializerOptions));
 
-        AssertPopulatedProfile(profile);
-        if (hasMissingFacts)
-            AssertMissingFacts(profile);
+        AssertPopulatedProfile(candidateProfile);
+        if (hasMissingFactsBool)
+        {
+            AssertMissingFacts(candidateProfile);
+        }
         else
         {
-            Assert.Equal(2, profile.Experience.Count);
-            Assert.Contains(profile.Education, item => item.Degree is not null);
+            Assert.Equal(2, candidateProfile.Experiences.Count);
+            Assert.Contains(candidateProfile.Educations, itemEducation => itemEducation.DegreeString is not null);
         }
     }
 
     // Both resumes must produce a name and nonempty experience, education, and skill lists.
-    private static void AssertPopulatedProfile(CandidateProfile profile)
+    private static void AssertPopulatedProfile(CandidateProfile candidateProfile)
     {
-        Assert.False(string.IsNullOrWhiteSpace(profile.Name));
-        Assert.NotEmpty(profile.Experience);
-        Assert.NotEmpty(profile.Education);
-        Assert.NotEmpty(profile.Skills);
+        Assert.False(string.IsNullOrWhiteSpace(candidateProfile.NameString));
+        Assert.NotEmpty(candidateProfile.Experiences);
+        Assert.NotEmpty(candidateProfile.Educations);
+        Assert.NotEmpty(candidateProfile.Skills);
     }
 
     // Missing and ambiguous source facts must remain unknown.
-    private static void AssertMissingFacts(CandidateProfile profile)
+    private static void AssertMissingFacts(CandidateProfile candidateProfile)
     {
-        Assert.Null(profile.Phone);
-        Assert.All(profile.Education, item => Assert.Null(item.Degree));
-        Assert.All(profile.Experience, item =>
+        Assert.Null(candidateProfile.PhoneString);
+        Assert.All(candidateProfile.Educations, itemEducation => Assert.Null(itemEducation.DegreeString));
+        Assert.All(
+            candidateProfile.Experiences,
+            itemExperience =>
         {
-            Assert.Null(item.StartDate);
-            Assert.Null(item.EndDate);
-            Assert.Null(item.DurationMonths);
+            Assert.Null(itemExperience.StartDateString);
+            Assert.Null(itemExperience.EndDateString);
+            Assert.Null(itemExperience.DurationMonthsInt);
         });
-        Assert.All(profile.Skills, item => Assert.Null(item.Proficiency));
-        Assert.Equal(2, profile.Skills.Count);
+        Assert.All(candidateProfile.Skills, itemSkill => Assert.Null(itemSkill.ProficiencyString));
+        Assert.Equal(2, candidateProfile.Skills.Count);
     }
 }

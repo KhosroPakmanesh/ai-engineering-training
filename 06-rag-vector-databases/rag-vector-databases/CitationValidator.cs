@@ -7,7 +7,11 @@ public static class CitationValidator
     {
         if (answerString == RagAnswerer.InsufficientEvidenceString)
         {
-            if (citedIdStrings.Count > 0) throw new InvalidDataException("An insufficient-evidence answer must not cite sources.");
+            if (citedIdStrings.Count > 0)
+            {
+                throw new InvalidDataException("An insufficient-evidence answer must not cite sources.");
+            }
+
             return;
         }
 

@@ -18,9 +18,9 @@ public class ExperienceInputsValidatorTests
     [InlineData("2024-01-01", null, null)]
     [InlineData("2024-01-01", null, "not-a-date")]
     [InlineData("2024-01-01", null, "2023-01-01")]
-    public void Invalid_or_unresolved_intervals_are_rejected(string startDate, string? endDate, string? evaluationDate)
+    public void Invalid_or_unresolved_intervals_are_rejected(string startDateString, string? endDateString, string? evaluationDateString)
     {
         Assert.Throws<InvalidDataException>(() =>
-            ExperienceInputsValidator.ValidateIntervals([new(startDate, endDate)], evaluationDate));
+            ExperienceInputsValidator.ValidateIntervals([new(startDateString, endDateString)], evaluationDateString));
     }
 }

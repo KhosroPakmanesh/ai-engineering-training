@@ -44,7 +44,8 @@ public class RagAnswererTests
             CitationValidator.Validate(answerString, citedIdStrings, preparedAnswer.SelectedRetrievedChunks);
 
             // Check the saved contract after evidence validation, using the application's JSON settings.
-            List<Citation> citations = citedIdStrings.Select(idString => new Citation(idString,
+            List<Citation> citations = citedIdStrings.Select(idString => new Citation(
+                idString,
                 preparedAnswer.SelectedRetrievedChunks
                     .Single(selectedRetrievedChunk => selectedRetrievedChunk.DocumentChunk.ChunkIdString == idString)
                     .DocumentChunk.FilenameString)).ToList();
@@ -67,12 +68,10 @@ public class RagAnswererTests
             Assert.Equal(preparedAnswer.CandidateRetrievedChunks.Count,
                 savedResultJsonDocument.RootElement.GetProperty("retrieved").GetArrayLength());
             JsonElement retrievedJsonElement = savedResultJsonDocument.RootElement.GetProperty("retrieved")[0];
-            Assert.Equal(new[] { "chunkId", "score" },
-                retrievedJsonElement.EnumerateObject().Select(jsonProperty => jsonProperty.Name));
+            Assert.Equal(new[] { "chunkId", "score" }, retrievedJsonElement.EnumerateObject().Select(jsonProperty => jsonProperty.Name));
             Assert.Equal(preparedAnswer.CandidateRetrievedChunks[0].DocumentChunk.ChunkIdString,
                 retrievedJsonElement.GetProperty("chunkId").GetString());
-            Assert.Equal(preparedAnswer.CandidateRetrievedChunks[0].ScoreDouble,
-                retrievedJsonElement.GetProperty("score").GetDouble());
+            Assert.Equal(preparedAnswer.CandidateRetrievedChunks[0].ScoreDouble, retrievedJsonElement.GetProperty("score").GetDouble());
 
             if (expectsChatBool)
             {
@@ -81,8 +80,7 @@ public class RagAnswererTests
                 Assert.Contains("Where did I use Docker?", chatResponseHandler.RequestBodyStrings[0]);
                 Assert.Contains("untrusted data", chatResponseHandler.RequestBodyStrings[0]);
                 JsonElement citationJsonElement = Assert.Single(savedResultJsonDocument.RootElement.GetProperty("citations").EnumerateArray());
-                Assert.Equal(new[] { "chunkId", "source" },
-                    citationJsonElement.EnumerateObject().Select(jsonProperty => jsonProperty.Name));
+                Assert.Equal(new[] { "chunkId", "source" }, citationJsonElement.EnumerateObject().Select(jsonProperty => jsonProperty.Name));
                 Assert.Equal("project-a.md#chunk-01", citationJsonElement.GetProperty("chunkId").GetString());
                 Assert.Equal("project-a.md", citationJsonElement.GetProperty("source").GetString());
             }

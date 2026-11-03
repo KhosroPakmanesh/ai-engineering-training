@@ -1,61 +1,72 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 public static class ContextCreator
 {
     // Prepare and check both prompts before making either model call.
-    public static List<PreparedContext> CreateContextStrategies(ComparisonInputs inputs)
+    public static List<PreparedContext> CreateContextStrategies(ComparisonInputs comparisonInputs)
     {
-        List<ContextStrategy> contexts =
+        List<ContextStrategy> contextStrategies =
         [
-            FullContextStrategy.Prepare(inputs.Sections),
-            SelectedContextStrategy.Prepare(inputs.Sections, inputs.Question)
+            FullContextStrategy.Prepare(comparisonInputs.ProjectSections),
+            SelectedContextStrategy.Prepare(comparisonInputs.ProjectSections, comparisonInputs.QuestionString)
         ];
 
-        return PrepareContext(contexts, inputs.Question);
+        return PrepareContext(contextStrategies, comparisonInputs.QuestionString);
     }
-    // Stop if a prompt is too long; do not remove source text to make it fit.
-    private static List<PreparedContext> PrepareContext(List<ContextStrategy> selectedContext, string question)
-    {
-        List<PreparedContext> preparedContext = selectedContext
-            .Select(context => new PreparedContext(context, BuildContext(question, context))).ToList();
 
-        foreach (PreparedContext item in preparedContext)
+    // Stop if a prompt is too long; do not remove source text to make it fit.
+    private static List<PreparedContext> PrepareContext(List<ContextStrategy> selectedContextStrategies, string questionString)
+    {
+        List<PreparedContext> preparedContexts = selectedContextStrategies
+            .Select(contextStrategy => new PreparedContext(contextStrategy, BuildContext(questionString, contextStrategy))).ToList();
+
+        foreach (PreparedContext preparedContext in preparedContexts)
         {
-            if (ContextCreatorHelpers.SystemInstructions.Length + item.Prompt.Length > ContextCreatorHelpers.PromptCharacterCap)
-                throw new InvalidDataException
-                    ($"The complete prompt exceeds {ContextCreatorHelpers.PromptCharacterCap} characters. " +
-                    $"No requests were made or content clipped.");
+            if (ContextCreatorHelpers.SystemInstructionsString.Length + preparedContext.PromptString.Length > ContextCreatorHelpers.PromptCharacterCapInt)
+            {
+                throw new InvalidDataException(
+                    $"The complete prompt exceeds {ContextCreatorHelpers.PromptCharacterCapInt} characters. " +
+                    "No requests were made or content clipped.");
+            }
         }
 
-        return preparedContext;
+        return preparedContexts;
     }
-    // Put the question and original project text in JSON so the model receives them as data.
-    private static string BuildContext(string question, ContextStrategy context)
-    {
-        JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-        return JsonSerializer.Serialize(new
+    // Put the question and original project text in JSON so the model receives them as data.
+    private static string BuildContext(string questionString, ContextStrategy contextStrategy)
+    {
+        JsonSerializerOptions jsonSerializerOptions = new(JsonSerializerDefaults.Web)
         {
-            question,
-            sections = context.Sections.Select(section => new
+            WriteIndented = true
+        };
+
+        return JsonSerializer.Serialize(
+            new
             {
-                id = section.Id,
-                heading = section.Heading,
-                text = section.Text
-            })
-        }, jsonOptions);
+                question = questionString,
+                sections = contextStrategy.ProjectSections.Select(projectSection => new
+                {
+                    id = projectSection.IdString,
+                    heading = projectSection.HeadingString,
+                    text = projectSection.TextString
+                })
+            },
+            jsonSerializerOptions);
     }
 
     // Keep each selected section whole and stop if the combined text exceeds the limit.
-    public static ContextStrategy CreateContext(List<ProjectSection> included, string strategy, int characterCap)
+    public static ContextStrategy CreateContext(List<ProjectSection> includedProjectSections, string strategyString, int characterCapInt)
     {
-        string context = string.Join("\n\n", included.Select(section => section.Text));
+        string contextString = string.Join("\n\n", includedProjectSections.Select(projectSection => projectSection.TextString));
 
-        if (context.Length > characterCap)
+        if (contextString.Length > characterCapInt)
+        {
             throw new InvalidDataException(
-                $"{strategy} context has {context.Length} characters; the cap is {characterCap}. " +
-                $"Shorten the source document. No content was clipped.");
+                $"{strategyString} context has {contextString.Length} characters; the cap is {characterCapInt}. " +
+                "Shorten the source document. No content was clipped.");
+        }
 
-        return new(strategy, included, context);
+        return new(strategyString, includedProjectSections, contextString);
     }
 }
