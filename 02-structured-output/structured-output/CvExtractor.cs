@@ -9,7 +9,10 @@ public static class CvExtractor
     private const int MaxOutputTokensInt = 4096;
 
     // Return the framework response so callers can check its JSON before reading the typed Result.
-    public static async Task<AgentResponse<CandidateProfile>> ExtractAsync(string rawStringResume, string resumeFileNameString, CancellationToken cancellationToken = default)
+    public static async Task<AgentResponse<CandidateProfile>> ExtractAsync(
+        string rawStringResume,
+        string resumeFileNameString,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(rawStringResume))
         {
@@ -19,18 +22,33 @@ public static class CvExtractor
         string folderString = AppContext.BaseDirectory;
 
         ProviderSettings providerSettings = await SettingsReader
-            .ReadSettingsAsync(folderString, cancellationToken);
+            .ReadSettingsAsync(
+                folderString,
+                cancellationToken);
 
-        return await ExtractAsync(rawStringResume, resumeFileNameString, providerSettings, httpClient: null, cancellationToken);
+        return await ExtractAsync(
+            rawStringResume,
+            resumeFileNameString,
+            providerSettings,
+            httpClient: null,
+            cancellationToken);
     }
 
     // Tests replace HTTP while the native agent and authored schema stay identical to the application.
-    internal static async Task<AgentResponse<CandidateProfile>> ExtractAsync(string rawStringResume, string resumeFileNameString,
-        ProviderSettings providerSettings, HttpClient? httpClient, CancellationToken cancellationToken = default)
+    internal static async Task<AgentResponse<CandidateProfile>> ExtractAsync(
+        string rawStringResume,
+        string resumeFileNameString,
+        ProviderSettings providerSettings,
+        HttpClient? httpClient,
+        CancellationToken cancellationToken = default)
     {
         string folderString = AppContext.BaseDirectory;
 
-        string resumeSchemaString = await File.ReadAllTextAsync(Path.Combine(folderString, "profile.schema.json"), cancellationToken);
+        string resumeSchemaString = await File.ReadAllTextAsync(
+            Path.Combine(
+                folderString,
+                "profile.schema.json"),
+            cancellationToken);
         string inputString = JsonSerializer.Serialize(new
         {
             sourceFilename = resumeFileNameString,
@@ -38,7 +56,9 @@ public static class CvExtractor
         });
 
         var aiClientFactory = new AiClientFactory();
-        using IChatClient iChatClient = aiClientFactory.CreateClient(providerSettings, httpClient);
+        using IChatClient iChatClient = aiClientFactory.CreateClient(
+            providerSettings,
+            httpClient);
         ChatClientAgent chatClientAgent = new(
             iChatClient,
             new ChatClientAgentOptions
@@ -49,8 +69,13 @@ public static class CvExtractor
                     Instructions = BuildInstruction(resumeSchemaString),
                     Temperature = TemperatureFloat,
                     MaxOutputTokens = MaxOutputTokensInt,
-                    ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonElement.Parse(resumeSchemaString), "CandidateProfile"),
-                    AdditionalProperties = new() { ["strict"] = true }
+                    ResponseFormat = ChatResponseFormat.ForJsonSchema(
+                        JsonElement.Parse(resumeSchemaString),
+                        "CandidateProfile"),
+                    AdditionalProperties = new()
+                    {
+                        ["strict"] = true
+                    }
                 }
             });
 
@@ -60,7 +85,9 @@ public static class CvExtractor
         using var deadlineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadlineCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
 
-        AgentResponse agentResponse = await chatClientAgent.RunAsync(inputString, cancellationToken: deadlineCancellationTokenSource.Token);
+        AgentResponse agentResponse = await chatClientAgent.RunAsync(
+            inputString,
+            cancellationToken: deadlineCancellationTokenSource.Token);
 
         // Check completeness before the separate schema and evidence stages accept the JSON.
         if (agentResponse.FinishReason == ChatFinishReason.Length)
@@ -68,10 +95,12 @@ public static class CvExtractor
             throw new InvalidDataException("The provider truncated its response at the output token limit.");
         }
 
-        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage => chatMessage.Role == ChatRole.Assistant)?.Text;
+        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage =>
+            chatMessage.Role == ChatRole.Assistant)?.Text;
         if (string.IsNullOrWhiteSpace(answerString))
         {
-            throw new InvalidDataException("The provider returned no response text. Check the model and its reasoning/output token budget.");
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
         }
 
         // Result deserializes only when the caller reads it, after validating the original JSON against our schema.
@@ -81,7 +110,9 @@ public static class CvExtractor
             // The typed response needs metadata describing the C# records when Result is read.
             TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
-        return new AgentResponse<CandidateProfile>(agentResponse, jsonSerializerOptions);
+        return new AgentResponse<CandidateProfile>(
+            agentResponse,
+            jsonSerializerOptions);
     }
 
     // Leave unknown facts as null and ask for resume quotes so each fact can be checked.

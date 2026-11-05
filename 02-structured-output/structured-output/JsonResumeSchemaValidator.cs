@@ -6,14 +6,28 @@ public static class JsonResumeSchemaValidator
     // Reject repeated field names and values that do not match the required JSON format.
     public static void ValidateSchema(string jsonResumeString)
     {
-        using JsonDocument jsonDocument = JsonDocument.Parse(jsonResumeString, new JsonDocumentOptions { AllowDuplicateProperties = false });
+        using JsonDocument jsonDocument = JsonDocument.Parse(
+            jsonResumeString,
+            new JsonDocumentOptions
+            {
+                AllowDuplicateProperties = false
+            });
 
-        JsonSchema jsonSchema = JsonSchema.FromText(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
+        JsonSchema jsonSchema = JsonSchema.FromText(File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "profile.schema.json")));
 
-        EvaluationResults evaluationResults = jsonSchema.Evaluate(jsonDocument.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        EvaluationResults evaluationResults = jsonSchema.Evaluate(
+            jsonDocument.RootElement,
+            new EvaluationOptions
+            {
+                OutputFormat = OutputFormat.List
+            });
         if (!evaluationResults.IsValid)
         {
-            throw new InvalidDataException(string.Join(Environment.NewLine, SchemaErrors(evaluationResults)));
+            throw new InvalidDataException(string.Join(
+                Environment.NewLine,
+                SchemaErrors(evaluationResults)));
         }
     }
 

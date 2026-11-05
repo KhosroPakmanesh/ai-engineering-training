@@ -22,7 +22,9 @@ public static class VectorMath
     }
 
     // Both inputs have unit length, so their dot product is cosine similarity.
-    public static double Cosine(List<float> leftFloats, List<float> rightFloats)
+    public static double Cosine(
+        List<float> leftFloats,
+        List<float> rightFloats)
     {
         if (leftFloats.Count != rightFloats.Count)
         {
@@ -35,6 +37,9 @@ public static class VectorMath
             scoreDouble += (double)leftFloats[indexInt] * rightFloats[indexInt];
         }
 
-        return Math.Clamp(scoreDouble, -1, 1);
+        return Math.Clamp(
+            scoreDouble,
+            -1,
+            1);
     }
 }

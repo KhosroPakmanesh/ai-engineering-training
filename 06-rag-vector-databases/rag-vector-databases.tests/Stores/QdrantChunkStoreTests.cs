@@ -9,24 +9,45 @@ public class QdrantChunkStoreTests
 {
     // This local-server integration costs no AI calls and uses its own collection, removed even on failure.
     [Fact]
-    [Trait("Category", "Integration")]
+    [Trait(
+        "Category",
+        "Integration")]
     public async Task Real_server_upserts_removes_stale_ids_and_checks_dimensions()
     {
+        // Arrange
         string nameString = $"rag-test-{Guid.NewGuid():N}";
-        using var cleanupQdrantClient = new QdrantClient("localhost", 6334, grpcTimeout: TimeSpan.FromSeconds(20));
+        using var cleanupQdrantClient = new QdrantClient(
+            "localhost",
+            6334,
+            grpcTimeout: TimeSpan.FromSeconds(20));
+
+        // Act
+        // Assert
         try
         {
             using IChunkStore selectedIChunkStore = new QdrantChunkStore(
-                new QdrantClient("localhost", 6334, grpcTimeout: TimeSpan.FromSeconds(20)), nameString);
+                new QdrantClient(
+                    "localhost",
+                    6334,
+                    grpcTimeout: TimeSpan.FromSeconds(20)),
+                nameString);
             Assert.Null(await selectedIChunkStore.ReadAsync());
             ChunkIndex chunkIndex = RagFixtures.CreateIndex();
             IndexValidator.Validate(chunkIndex);
             await selectedIChunkStore.SynchronizeAsync(chunkIndex);
             await selectedIChunkStore.SynchronizeAsync(chunkIndex);
-            Assert.Equal(2, (await selectedIChunkStore.ReadAsync())!.IndexedChunks.Count);
-            List<RetrievedChunk> rankedRetrievedChunks = await selectedIChunkStore.SearchAsync([1, 0], 2);
-            Assert.Equal("project-a.md#chunk-01", rankedRetrievedChunks[0].DocumentChunk.ChunkIdString);
-            Assert.Equal(1, rankedRetrievedChunks[0].ScoreDouble);
+            Assert.Equal(
+                2,
+                (await selectedIChunkStore.ReadAsync())!.IndexedChunks.Count);
+            List<RetrievedChunk> rankedRetrievedChunks = await selectedIChunkStore.SearchAsync(
+                [1, 0],
+                2);
+            Assert.Equal(
+                "project-a.md#chunk-01",
+                rankedRetrievedChunks[0].DocumentChunk.ChunkIdString);
+            Assert.Equal(
+                1,
+                rankedRetrievedChunks[0].ScoreDouble);
             chunkIndex.IndexedChunks.RemoveAt(1);
             chunkIndex.IndexedChunks[0] = chunkIndex.IndexedChunks[0] with
             {
@@ -36,7 +57,8 @@ public class QdrantChunkStoreTests
                 }
             };
             await selectedIChunkStore.SynchronizeAsync(chunkIndex);
-            Assert.Equal("Updated Docker work.",
+            Assert.Equal(
+                "Updated Docker work.",
                 Assert.Single((await selectedIChunkStore.ReadAsync())!.IndexedChunks).DocumentChunk.TextString);
             ChunkIndex incompatibleChunkIndex = chunkIndex with
             {
@@ -45,8 +67,12 @@ public class QdrantChunkStoreTests
                     DimensionsInt = 3
                 }
             };
-            InvalidDataException invalidDataException = await Assert.ThrowsAsync<InvalidDataException>(() => selectedIChunkStore.SynchronizeAsync(incompatibleChunkIndex));
-            Assert.Contains("dimension", invalidDataException.Message, StringComparison.OrdinalIgnoreCase);
+            InvalidDataException invalidDataException = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                selectedIChunkStore.SynchronizeAsync(incompatibleChunkIndex));
+            Assert.Contains(
+                "dimension",
+                invalidDataException.Message,
+                StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

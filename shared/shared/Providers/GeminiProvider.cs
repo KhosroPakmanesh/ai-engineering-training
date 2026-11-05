@@ -9,32 +9,52 @@ internal sealed class GeminiProvider : IAiProviderStrategy
     public Uri EndpointUri { get; } = new("https://generativelanguage.googleapis.com/v1beta/openai/");
 
     // Google's compatibility endpoint needs no OpenRouter routing options.
-    public IChatClient CreateClient(ProviderSettings providerSettings, HttpClient? httpClient)
+    public IChatClient CreateClient(
+        ProviderSettings providerSettings,
+        HttpClient? httpClient)
     {
-        return OpenAiCompatibleClient.CreateClient(providerSettings, httpClient);
+        return OpenAiCompatibleClient.CreateClient(
+            providerSettings,
+            httpClient);
     }
 
     // Keep Google's omitted-zero convention below Microsoft's common embedding interface.
-    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings providerSettings, HttpClient? httpClient)
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(
+        ProviderSettings providerSettings,
+        HttpClient? httpClient)
     {
-        return OpenAiCompatibleClient.CreateEmbeddingGenerator(providerSettings, httpClient, new OmittedZeroIndexPolicy());
+        return OpenAiCompatibleClient.CreateEmbeddingGenerator(
+            providerSettings,
+            httpClient,
+            new OmittedZeroIndexPolicy());
     }
 
     // Gemini can omit a numeric zero in its JSON. Restore only that unambiguous default, never guess document order.
     private sealed class OmittedZeroIndexPolicy : PipelinePolicy
     {
         // Keep the same wire convention when the SDK is called synchronously.
-        public override void Process(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies, int currentIndexInt)
+        public override void Process(
+            PipelineMessage pipelineMessage,
+            IReadOnlyList<PipelinePolicy> pipelinePolicies,
+            int currentIndexInt)
         {
-            ProcessNext(pipelineMessage, pipelinePolicies, currentIndexInt);
+            ProcessNext(
+                pipelineMessage,
+                pipelinePolicies,
+                currentIndexInt);
             RestoreZeroIndex(pipelineMessage);
         }
 
         // Apply the convention after HTTP completes and before the SDK reads the vectors.
-        public override async ValueTask ProcessAsync(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies,
+        public override async ValueTask ProcessAsync(
+            PipelineMessage pipelineMessage,
+            IReadOnlyList<PipelinePolicy> pipelinePolicies,
             int currentIndexInt)
         {
-            await ProcessNextAsync(pipelineMessage, pipelinePolicies, currentIndexInt);
+            await ProcessNextAsync(
+                pipelineMessage,
+                pipelinePolicies,
+                currentIndexInt);
             RestoreZeroIndex(pipelineMessage);
         }
 
@@ -71,8 +91,10 @@ internal sealed class GeminiProvider : IAiProviderStrategy
 
                     missingZeroJsonObject = itemJsonObject;
                 }
-                else if (itemJsonObject["index"] is not JsonValue indexJsonValue || !indexJsonValue.TryGetValue(out int positionInt) ||
-                    positionInt <= 0 || positionInt >= dataJsonArray.Count || !positiveIndexeIntsHashSet.Add(positionInt))
+                else if (itemJsonObject["index"] is not JsonValue indexJsonValue
+                    || !indexJsonValue.TryGetValue(out int positionInt) ||
+                    positionInt <= 0 || positionInt >= dataJsonArray.Count
+                    || !positiveIndexeIntsHashSet.Add(positionInt))
                 {
                     return;
                 }

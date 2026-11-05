@@ -7,8 +7,7 @@ public static class OutputPrinter
     public static void PrintIntroduction(string resumeFileNameString)
     {
         PrintHeading("Structured Output: turn a resume into checked JSON");
-        Console.WriteLine(
-            $"Source: SampleData/{resumeFileNameString}\n" +
+        Console.WriteLine($"Source: SampleData/{resumeFileNameString}\n" +
             "The model proposes a profile with fixed fields. Unknown facts should stay null.\n" +
             "Local stages check the JSON schema, read the framework's typed profile, and check exact resume quotes.\n" +
             "Only then are skill names trimmed and duplicates removed.");
@@ -27,13 +26,17 @@ public static class OutputPrinter
     public static void PrintProfile(CandidateProfile candidateProfile)
     {
         PrintHeading("\nAccepted profile");
-        PrintColoredLine("── Profile 1 ──────────────────────────────", ConsoleColor.White);
+        PrintColoredLine(
+            "── Profile 1 ──────────────────────────────",
+            ConsoleColor.White);
         Console.WriteLine("Schema and evidence checks: passed; skill normalization: complete.");
         JsonSerializerOptions jsonSerializerOptions = new(JsonSerializerDefaults.Web)
         {
             WriteIndented = true
         };
-        string formattedJsonString = JsonSerializer.Serialize(candidateProfile, jsonSerializerOptions);
+        string formattedJsonString = JsonSerializer.Serialize(
+            candidateProfile,
+            jsonSerializerOptions);
         Console.WriteLine(formattedJsonString);
     }
 

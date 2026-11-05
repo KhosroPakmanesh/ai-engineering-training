@@ -4,10 +4,16 @@ using Microsoft.Data.Sqlite;
 public static class SqliteSearchIndex
 {
     // Replace documents and metadata together; a failed replacement keeps the previous complete index.
-    public static void Replace(string pathString, SearchIndex searchIndex)
+    public static void Replace(
+        string pathString,
+        SearchIndex searchIndex)
     {
         using var sqliteConnection = new SqliteConnection(
-            new SqliteConnectionStringBuilder { DataSource = pathString, Pooling = false }.ToString());
+            new SqliteConnectionStringBuilder
+            {
+                DataSource = pathString,
+                Pooling = false
+            }.ToString());
 
         sqliteConnection.Open();
         using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
@@ -24,9 +30,15 @@ public static class SqliteSearchIndex
             DELETE FROM IndexMetadata;
             INSERT INTO IndexMetadata VALUES (1, $provider, $model, $dimensions);
             """;
-        sqliteCommand.Parameters.AddWithValue("$provider", searchIndex.ProviderString);
-        sqliteCommand.Parameters.AddWithValue("$model", searchIndex.ModelString);
-        sqliteCommand.Parameters.AddWithValue("$dimensions", searchIndex.DimensionsInt);
+        sqliteCommand.Parameters.AddWithValue(
+            "$provider",
+            searchIndex.ProviderString);
+        sqliteCommand.Parameters.AddWithValue(
+            "$model",
+            searchIndex.ModelString);
+        sqliteCommand.Parameters.AddWithValue(
+            "$dimensions",
+            searchIndex.DimensionsInt);
         sqliteCommand.ExecuteNonQuery();
 
         for (int positionInt = 0; positionInt < searchIndex.IndexedProjects.Count; positionInt++)
@@ -35,11 +47,21 @@ public static class SqliteSearchIndex
             using SqliteCommand insertSqliteCommand = sqliteConnection.CreateCommand();
             insertSqliteCommand.Transaction = sqliteTransaction;
             insertSqliteCommand.CommandText = "INSERT INTO Projects VALUES ($id, $position, $text, $skills, $vector);";
-            insertSqliteCommand.Parameters.AddWithValue("$id", indexedProject.ProjectDescription.IdString);
-            insertSqliteCommand.Parameters.AddWithValue("$position", positionInt);
-            insertSqliteCommand.Parameters.AddWithValue("$text", indexedProject.ProjectDescription.TextString);
-            insertSqliteCommand.Parameters.AddWithValue("$skills", JsonSerializer.Serialize(indexedProject.ProjectDescription.SkillStrings));
-            insertSqliteCommand.Parameters.AddWithValue("$vector", JsonSerializer.Serialize(indexedProject.VectorFloats));
+            insertSqliteCommand.Parameters.AddWithValue(
+                "$id",
+                indexedProject.ProjectDescription.IdString);
+            insertSqliteCommand.Parameters.AddWithValue(
+                "$position",
+                positionInt);
+            insertSqliteCommand.Parameters.AddWithValue(
+                "$text",
+                indexedProject.ProjectDescription.TextString);
+            insertSqliteCommand.Parameters.AddWithValue(
+                "$skills",
+                JsonSerializer.Serialize(indexedProject.ProjectDescription.SkillStrings));
+            insertSqliteCommand.Parameters.AddWithValue(
+                "$vector",
+                JsonSerializer.Serialize(indexedProject.VectorFloats));
             insertSqliteCommand.ExecuteNonQuery();
         }
 
@@ -89,12 +111,21 @@ public static class SqliteSearchIndex
                     ?? throw new InvalidDataException("An indexed project's skills must be a JSON list.");
                 List<float> vectorFloats = JsonSerializer.Deserialize<List<float>>(sqliteDataReader.GetString(3))
                     ?? throw new InvalidDataException("An indexed project's vector must be a JSON list.");
-                indexedProjects.Add(new(new(sqliteDataReader.GetString(0), sqliteDataReader.GetString(1), skillStrings), vectorFloats));
+                indexedProjects.Add(new(
+                    new(
+                        sqliteDataReader.GetString(0),
+                        sqliteDataReader.GetString(1),
+                        skillStrings),
+                    vectorFloats));
             }
         }
 
         sqliteTransaction.Commit();
 
-        return new(providerString, modelString, dimensionsInt, indexedProjects);
+        return new(
+            providerString,
+            modelString,
+            dimensionsInt,
+            indexedProjects);
     }
 }

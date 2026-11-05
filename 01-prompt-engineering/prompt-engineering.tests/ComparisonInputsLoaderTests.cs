@@ -6,8 +6,14 @@ public class ComparisonInputsLoaderTests
     [Fact]
     public async Task Missing_later_prompt_is_rejected_during_loading()
     {
+        // Arrange
         List<PromptFile> promptFiles = PromptTestData.CreatePromptFiles();
-        promptFiles[^1] = new("Missing", "Prompts/does-not-exist.txt");
+        promptFiles[^1] = new(
+            "Missing",
+            "Prompts/does-not-exist.txt");
+
+        // Act
+        // Assert
         await Assert.ThrowsAsync<FileNotFoundException>(() => ComparisonInputsLoader.LoadAsync(promptFiles));
     }
 }

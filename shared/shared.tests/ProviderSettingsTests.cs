@@ -6,8 +6,21 @@ public class ProviderSettingsTests
     [Fact]
     public void Settings_description_does_not_expose_credentials()
     {
-        var providerSettings = new ProviderSettings("Gemini", "secret-test-key", "gemini-model", new Uri("https://example.com"));
-        Assert.DoesNotContain(providerSettings.KeyString, providerSettings.ToString());
-        Assert.Contains(providerSettings.ModelString, providerSettings.ToString());
+        // Arrange
+        var providerSettings = new ProviderSettings(
+            "Gemini",
+            "secret-test-key",
+            "gemini-model",
+            new Uri("https://example.com"));
+
+        // Act
+        Assert.DoesNotContain(
+            providerSettings.KeyString,
+            providerSettings.ToString());
+
+        // Assert
+        Assert.Contains(
+            providerSettings.ModelString,
+            providerSettings.ToString());
     }
 }

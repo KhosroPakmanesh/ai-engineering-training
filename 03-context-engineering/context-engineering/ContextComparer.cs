@@ -8,19 +8,33 @@ public static partial class ContextComparer
     private const int MaxOutputTokensInt = 4_096;
 
     // Use the same model and settings for both contexts, with a separate conversation for each.
-    public static async Task<ComparisonReport> CompareContextAsync(string sourceFileString, ComparisonInputs comparisonInputs,
-        List<PreparedContext> preparedContexts, CancellationToken cancellationToken = default)
+    public static async Task<ComparisonReport> CompareContextAsync(
+        string sourceFileString,
+        ComparisonInputs comparisonInputs,
+        List<PreparedContext> preparedContexts,
+        CancellationToken cancellationToken = default)
     {
         string folderString = AppContext.BaseDirectory;
-        ProviderSettings providerSettings = await SettingsReader.ReadSettingsAsync(folderString, cancellationToken);
+        ProviderSettings providerSettings = await SettingsReader.ReadSettingsAsync(
+            folderString,
+            cancellationToken);
 
-        return await CompareContextAsync(sourceFileString, comparisonInputs, preparedContexts, providerSettings, httpClient: null,
+        return await CompareContextAsync(
+            sourceFileString,
+            comparisonInputs,
+            preparedContexts,
+            providerSettings,
+            httpClient: null,
             cancellationToken);
     }
 
     // The same prepared comparison can use an injected HTTP boundary in deterministic tests.
-    internal static async Task<ComparisonReport> CompareContextAsync(string sourceFileString, ComparisonInputs comparisonInputs,
-        List<PreparedContext> preparedContexts, ProviderSettings providerSettings, HttpClient? httpClient,
+    internal static async Task<ComparisonReport> CompareContextAsync(
+        string sourceFileString,
+        ComparisonInputs comparisonInputs,
+        List<PreparedContext> preparedContexts,
+        ProviderSettings providerSettings,
+        HttpClient? httpClient,
         CancellationToken cancellationToken = default)
     {
 
@@ -31,14 +45,27 @@ public static partial class ContextComparer
         {
             // Measure only the native request, then inspect the returned answer in separate stages.
             var stopwatch = Stopwatch.StartNew();
-            AgentResponse agentResponse = await RequestAsync(providerSettings, preparedContext, httpClient, cancellationToken);
+            AgentResponse agentResponse = await RequestAsync(
+                providerSettings,
+                preparedContext,
+                httpClient,
+                cancellationToken);
             stopwatch.Stop();
-            string answerString = agentResponse.Messages.Last(chatMessage => chatMessage.Role == ChatRole.Assistant).Text.Trim();
+            string answerString = agentResponse.Messages.Last(chatMessage =>
+                chatMessage.Role == ChatRole.Assistant).Text.Trim();
             List<string> citedIdStrings = ContextEvidenceChecker.CitedIds(answerString);
-            List<string> evidenceFlagStrings = ContextEvidenceChecker.CheckEvidence(answerString,
-                preparedContext.ContextStrategy.ProjectSections, comparisonInputs.ExpectedIdStrings);
-            ContextResult contextResult = CreateResult(preparedContext, answerString, agentResponse.Usage, stopwatch.ElapsedMilliseconds,
-                comparisonInputs.ExpectedIdStrings, citedIdStrings, evidenceFlagStrings);
+            List<string> evidenceFlagStrings = ContextEvidenceChecker.CheckEvidence(
+                answerString,
+                preparedContext.ContextStrategy.ProjectSections,
+                comparisonInputs.ExpectedIdStrings);
+            ContextResult contextResult = CreateResult(
+                preparedContext,
+                answerString,
+                agentResponse.Usage,
+                stopwatch.ElapsedMilliseconds,
+                comparisonInputs.ExpectedIdStrings,
+                citedIdStrings,
+                evidenceFlagStrings);
             contextResults.Add(contextResult);
         }
 
@@ -59,11 +86,16 @@ public static partial class ContextComparer
     }
 
     // Send only this context so the model cannot use an earlier answer.
-    private static async Task<AgentResponse> RequestAsync(ProviderSettings providerSettings, PreparedContext preparedContext,
-        HttpClient? httpClient, CancellationToken cancellationToken)
+    private static async Task<AgentResponse> RequestAsync(
+        ProviderSettings providerSettings,
+        PreparedContext preparedContext,
+        HttpClient? httpClient,
+        CancellationToken cancellationToken)
     {
         var aiClientFactory = new AiClientFactory();
-        using IChatClient iChatClient = aiClientFactory.CreateClient(providerSettings, httpClient);
+        using IChatClient iChatClient = aiClientFactory.CreateClient(
+            providerSettings,
+            httpClient);
         ChatClientAgent chatClientAgent = new(
             iChatClient,
             new ChatClientAgentOptions
@@ -81,7 +113,9 @@ public static partial class ContextComparer
         using var deadlineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadlineCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
 
-        AgentResponse agentResponse = await chatClientAgent.RunAsync(preparedContext.PromptString, cancellationToken: deadlineCancellationTokenSource.Token);
+        AgentResponse agentResponse = await chatClientAgent.RunAsync(
+            preparedContext.PromptString,
+            cancellationToken: deadlineCancellationTokenSource.Token);
 
         // Preserve both comparison results only when each response is present and complete.
         if (agentResponse.FinishReason == ChatFinishReason.Length)
@@ -89,43 +123,69 @@ public static partial class ContextComparer
             throw new InvalidDataException("The provider truncated its response at the output token limit.");
         }
 
-        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage => chatMessage.Role == ChatRole.Assistant)?.Text;
+        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage =>
+            chatMessage.Role == ChatRole.Assistant)?.Text;
         if (string.IsNullOrWhiteSpace(answerString))
         {
-            throw new InvalidDataException("The provider returned no response text. Check the model and its reasoning/output token budget.");
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
         }
 
         return agentResponse;
     }
 
     // Keep failed evidence checks with the answer so both results can still be compared.
-    private static ContextResult CreateResult(PreparedContext preparedContext, string responseTextString, UsageDetails? usageDetails,
-        long latencyMillisecondsLong, List<string>? expectedIdStrings, List<string> citedIdStrings, List<string> evidenceFlagStrings)
+    private static ContextResult CreateResult(
+        PreparedContext preparedContext,
+        string responseTextString,
+        UsageDetails? usageDetails,
+        long latencyMillisecondsLong,
+        List<string>? expectedIdStrings,
+        List<string> citedIdStrings,
+        List<string> evidenceFlagStrings)
     {
         ContextStrategy contextStrategy = preparedContext.ContextStrategy;
         string answerString = responseTextString;
 
         // Missing measurements mean unknown, even when the framework returns an empty usage object.
         TokenUsage? providerTokenUsage = usageDetails is null ||
-            (usageDetails.InputTokenCount is null && usageDetails.OutputTokenCount is null && usageDetails.TotalTokenCount is null)
-            ? null : new(usageDetails.InputTokenCount, usageDetails.OutputTokenCount, usageDetails.TotalTokenCount);
+            (usageDetails.InputTokenCount is null && usageDetails.OutputTokenCount is null
+            && usageDetails.TotalTokenCount is null)
+            ? null : new(
+                usageDetails.InputTokenCount,
+                usageDetails.OutputTokenCount,
+                usageDetails.TotalTokenCount);
 
-        List<string> includedIdStrings = contextStrategy.ProjectSections.Select(projectSection => projectSection.IdString).ToList();
-        int promptCharactersInt = ContextCreatorHelpers.SystemInstructionsString.Length + preparedContext.PromptString.Length;
+        List<string> includedIdStrings = contextStrategy.ProjectSections.Select(projectSection =>
+            projectSection.IdString).ToList();
+        int promptCharactersInt =
+            ContextCreatorHelpers.SystemInstructionsString.Length + preparedContext.PromptString.Length;
 
-        return new(StrategyString: contextStrategy.StrategyString, IncludedSectionIdStrings: includedIdStrings,
-            ContextCharactersInt: contextStrategy.TextString.Length, PromptCharactersInt: promptCharactersInt,
-            EstimatedPromptTokensInt: (int)Math.Ceiling(promptCharactersInt / 4.0), ProviderTokenUsage: providerTokenUsage,
+        return new(
+            StrategyString: contextStrategy.StrategyString,
+            IncludedSectionIdStrings: includedIdStrings,
+            ContextCharactersInt: contextStrategy.TextString.Length,
+            PromptCharactersInt: promptCharactersInt,
+            EstimatedPromptTokensInt: (int)Math.Ceiling(promptCharactersInt / 4.0),
+            ProviderTokenUsage: providerTokenUsage,
             LatencyMillisecondsLong: latencyMillisecondsLong,
-            SourceRecallDouble: CalculateSourceRecall(includedIdStrings, expectedIdStrings), ResponseString: answerString,
-            CitedSectionIdStrings: citedIdStrings, EvidenceFlagStrings: evidenceFlagStrings);
+            SourceRecallDouble: CalculateSourceRecall(
+                includedIdStrings,
+                expectedIdStrings),
+            ResponseString: answerString,
+            CitedSectionIdStrings: citedIdStrings,
+            EvidenceFlagStrings: evidenceFlagStrings);
     }
 
     // Source recall is the share of expected project IDs included in the context; it does not rate the answer.
-    private static double? CalculateSourceRecall(List<string> includedIdStrings, List<string>? expectedIdStrings)
+    private static double? CalculateSourceRecall(
+        List<string> includedIdStrings,
+        List<string>? expectedIdStrings)
     {
         return expectedIdStrings is { Count: > 0 }
-            ? (double)expectedIdStrings.Count(idString => includedIdStrings.Contains(idString, StringComparer.Ordinal)) / expectedIdStrings.Count
+            ? (double)expectedIdStrings.Count(idString => includedIdStrings.Contains(
+                idString,
+                StringComparer.Ordinal)) / expectedIdStrings.Count
             : null;
     }
 }

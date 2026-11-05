@@ -11,7 +11,9 @@ try
     //------------------------------------------------------------------------//
 
     // 1. Load and validate the source inputs before making a model request.
-    ExperienceInputs experienceInputs = await ExperienceInputsLoader.LoadAsync(questionString, evaluationDateString);
+    ExperienceInputs experienceInputs = await ExperienceInputsLoader.LoadAsync(
+        questionString,
+        evaluationDateString);
     ExperienceInputsValidator.ValidateInputs(experienceInputs);
 
     // 2. Explain the two-turn conversation.
@@ -38,14 +40,18 @@ try
     ExperienceResult experienceResult = parsedExperienceResponse.ExperienceResult;
 
     // 3. Check the final answer's total and citation against the calculation.
-    ExperienceResultValidator.ValidateAnswer(parsedExperienceResponse.AnswerString, experienceResult);
+    ExperienceResultValidator.ValidateAnswer(
+        parsedExperienceResponse.AnswerString,
+        experienceResult);
 
     //------------------------------------------------------------------------//
     //                          RESULTS AND TAKEAWAY                          //
     //------------------------------------------------------------------------//
 
     // 1. Show the calculation counts, request measurements, and accepted answer.
-    OutputPrinter.PrintResults(parsedExperienceResponse, timerStopwatch.ElapsedMilliseconds);
+    OutputPrinter.PrintResults(
+        parsedExperienceResponse,
+        timerStopwatch.ElapsedMilliseconds);
     OutputPrinter.PrintTakeaway();
 
     return 0;

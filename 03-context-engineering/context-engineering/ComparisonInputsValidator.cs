@@ -5,7 +5,9 @@ public static class ComparisonInputsValidator
     {
         if (string.IsNullOrWhiteSpace(questionString) || questionString.Length > 500)
         {
-            throw new ArgumentException("The question must contain between 1 and 500 characters.", nameof(questionString));
+            throw new ArgumentException(
+                "The question must contain between 1 and 500 characters.",
+                nameof(questionString));
         }
     }
 }

@@ -1,4 +1,3 @@
-
 public static class InputValidator
 {
     // Check the complete comparison before any prompt can reach a paid request.

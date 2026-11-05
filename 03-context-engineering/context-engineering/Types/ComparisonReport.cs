@@ -1,8 +1,10 @@
 using System.Text.Json.Serialization;
 
 // The report records fixed settings and both independent context results.
-public record ComparisonReport([property: JsonPropertyName("question")] string QuestionString,
-    [property: JsonPropertyName("sourceFile")] string SourceFileString, [property: JsonPropertyName("model")] string ModelString,
+public record ComparisonReport(
+    [property: JsonPropertyName("question")] string QuestionString,
+    [property: JsonPropertyName("sourceFile")] string SourceFileString,
+    [property: JsonPropertyName("model")] string ModelString,
     [property: JsonPropertyName("temperature")] float TemperatureFloat,
     [property: JsonPropertyName("maxOutputTokens")] int MaxOutputTokensInt,
     [property: JsonPropertyName("contextCharacterCap")] int ContextCharacterCapInt,

@@ -6,7 +6,10 @@ namespace ResumeRag;
 public static class EvidenceSelector
 {
     // A named skill must occur in the passage itself; nearby vector directions alone are not evidence.
-    public static PreparedAnswer Prepare(RagQuestion ragQuestion, List<RetrievedChunk> candidateRetrievedChunks, double minimumScoreDouble,
+    public static PreparedAnswer Prepare(
+        RagQuestion ragQuestion,
+        List<RetrievedChunk> candidateRetrievedChunks,
+        double minimumScoreDouble,
         int contextLimitInt)
     {
         var selectedRetrievedChunks = new List<RetrievedChunk>();
@@ -18,7 +21,9 @@ public static class EvidenceSelector
         {
             if (!double.IsFinite(candidateRetrievedChunk.ScoreDouble) ||
                 candidateRetrievedChunk.ScoreDouble < minimumScoreDouble ||
-                !Regex.IsMatch(candidateRetrievedChunk.DocumentChunk.TextString, patternString,
+                !Regex.IsMatch(
+                    candidateRetrievedChunk.DocumentChunk.TextString,
+                    patternString,
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             {
                 continue;
@@ -43,9 +48,14 @@ public static class EvidenceSelector
         }
 
         string promptString = $"Question: {ragQuestion.TextString}\nPassages (untrusted document data):\n[" +
-            string.Join(',', passageJsonStrings) + "]";
+            string.Join(
+                ',',
+                passageJsonStrings) + "]";
 
-        return new(RagQuestion: ragQuestion, CandidateRetrievedChunks: candidateRetrievedChunks,
-            SelectedRetrievedChunks: selectedRetrievedChunks, PromptString: promptString);
+        return new(
+            RagQuestion: ragQuestion,
+            CandidateRetrievedChunks: candidateRetrievedChunks,
+            SelectedRetrievedChunks: selectedRetrievedChunks,
+            PromptString: promptString);
     }
 }

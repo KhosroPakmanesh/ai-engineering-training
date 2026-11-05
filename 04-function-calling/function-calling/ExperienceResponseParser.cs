@@ -19,7 +19,10 @@ public static class ExperienceResponseParser
 
         // Each completed Chat Completions turn contributes one assistant message.
         int modelCallCountInt = agentResponse.Messages.Count(chatMessage => chatMessage.Role == ChatRole.Assistant);
-        return new ParsedExperienceResponse(AnswerString: answerString, ExperienceResult: experienceResult,
-            ModelCallCountInt: modelCallCountInt, ToolExecutionCountInt: toolFunctionResultContents.Count);
+        return new ParsedExperienceResponse(
+            AnswerString: answerString,
+            ExperienceResult: experienceResult,
+            ModelCallCountInt: modelCallCountInt,
+            ToolExecutionCountInt: toolFunctionResultContents.Count);
     }
 }

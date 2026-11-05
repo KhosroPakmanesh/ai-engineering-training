@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.3.1" />
+    <ProjectReference Include="../../shared/shared/shared.csproj" />
+    <ProjectReference Include="../mcp-server/mcp-server.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopyMcpServer" AfterTargets="Build">
+    <ItemGroup>
+      <McpServerFiles Include="../mcp-server/bin/$(Configuration)/$(TargetFramework)/**/*"
+                      Exclude="../mcp-server/bin/$(Configuration)/$(TargetFramework)/data/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(McpServerFiles)" DestinationFiles="@(McpServerFiles->'$(OutDir)Server/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

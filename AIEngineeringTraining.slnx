@@ -4,6 +4,12 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/07-mcp-server/">
+    <Project Path="07-mcp-server/mcp-client/mcp-client.csproj" />
+    <Project Path="07-mcp-server/mcp-client.tests/mcp-client.tests.csproj" />
+    <Project Path="07-mcp-server/mcp-server/mcp-server.csproj" />
+    <Project Path="07-mcp-server/mcp-server.tests/mcp-server.tests.csproj" />
+  </Folder>
   <Folder Name="/06-rag-vector-databases/">
     <Project Path="06-rag-vector-databases/rag-vector-databases.tests/rag-vector-databases.tests.csproj" />
     <Project Path="06-rag-vector-databases/rag-vector-databases/rag-vector-databases.csproj" />

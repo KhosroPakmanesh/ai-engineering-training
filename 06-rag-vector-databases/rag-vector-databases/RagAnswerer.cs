@@ -17,7 +17,9 @@ public static class RagAnswerer
         """;
 
     // The caller admits evidence first. Each request starts a fresh conversation and returns the native response.
-    public static async Task<AgentResponse> RequestAsync(IChatClient answerIChatClient, PreparedAnswer preparedAnswer,
+    public static async Task<AgentResponse> RequestAsync(
+        IChatClient answerIChatClient,
+        PreparedAnswer preparedAnswer,
         CancellationToken cancellationToken = default)
     {
         ChatClientAgent chatClientAgent = new(
@@ -35,14 +37,16 @@ public static class RagAnswerer
 
         using var deadlineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadlineCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
-        AgentResponse agentResponse = await chatClientAgent.RunAsync(preparedAnswer.PromptString,
+        AgentResponse agentResponse = await chatClientAgent.RunAsync(
+            preparedAnswer.PromptString,
             cancellationToken: deadlineCancellationTokenSource.Token);
         if (agentResponse.FinishReason == ChatFinishReason.Length)
         {
             throw new InvalidDataException("The provider truncated the answer at the output token limit.");
         }
 
-        if (string.IsNullOrWhiteSpace(agentResponse.Messages.LastOrDefault(chatMessage => chatMessage.Role == ChatRole.Assistant)?.Text))
+        if (string.IsNullOrWhiteSpace(agentResponse.Messages.LastOrDefault(chatMessage =>
+            chatMessage.Role == ChatRole.Assistant)?.Text))
         {
             throw new InvalidDataException("The provider returned no final assistant text.");
         }

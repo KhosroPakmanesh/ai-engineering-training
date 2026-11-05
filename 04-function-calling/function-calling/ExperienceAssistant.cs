@@ -25,19 +25,32 @@ public static class ExperienceAssistant
         """;
 
     // Use the selected shared provider; a tool conversation starts without earlier lesson runs.
-    public static async Task<AgentResponse> AskAsync(ExperienceInputs experienceInputs, CancellationToken cancellationToken = default)
+    public static async Task<AgentResponse> AskAsync(
+        ExperienceInputs experienceInputs,
+        CancellationToken cancellationToken = default)
     {
         ProviderSettings providerSettings = await SettingsReader
-            .ReadSettingsAsync(AppContext.BaseDirectory, cancellationToken);
+            .ReadSettingsAsync(
+                AppContext.BaseDirectory,
+                cancellationToken);
 
-        return await AskAsync(experienceInputs, providerSettings, httpClient: null, cancellationToken);
+        return await AskAsync(
+            experienceInputs,
+            providerSettings,
+            httpClient: null,
+            cancellationToken);
     }
 
     // Tests replace only the HTTP transport; the same request, agent, and real function loop still run.
-    internal static async Task<AgentResponse> AskAsync(ExperienceInputs experienceInputs, ProviderSettings providerSettings,
-        HttpClient? httpClient, CancellationToken cancellationToken = default)
+    internal static async Task<AgentResponse> AskAsync(
+        ExperienceInputs experienceInputs,
+        ProviderSettings providerSettings,
+        HttpClient? httpClient,
+        CancellationToken cancellationToken = default)
     {
-        string inputString = JsonSerializer.Serialize(experienceInputs, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        string inputString = JsonSerializer.Serialize(
+            experienceInputs,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         // The callback and both model turns share this one cancellation deadline.
         cancellationToken.ThrowIfCancellationRequested();
@@ -48,7 +61,10 @@ public static class ExperienceAssistant
         // The framework derives the tool's argument schema from these C# parameter types.
         // intervals and evaluationDate are existing protocol fields and must stay unchanged.
         AIFunction calculationAIFunction = AIFunctionFactory.Create(
-            (List<WorkInterval> intervals, string? evaluationDate, CancellationToken cancellationToken) =>
+            (
+                List<WorkInterval> intervals,
+                string? evaluationDate,
+                CancellationToken cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 deadlineCancellationTokenSource.Token.ThrowIfCancellationRequested();
@@ -58,13 +74,16 @@ public static class ExperienceAssistant
                     throw new InvalidDataException("CalculateExperience may execute at most once per run.");
                 }
 
-                return CalculateForSource(experienceInputs, intervals, evaluationDate, deadlineCancellationTokenSource.Token);
+                return CalculateForSource(
+                    experienceInputs,
+                    intervals,
+                    evaluationDate,
+                    deadlineCancellationTokenSource.Token);
             },
             new AIFunctionFactoryOptions
             {
                 Name = ToolNameString,
-                Description =
-                    "Count full calendar months in all supplied work intervals. " +
+                Description = "Count full calendar months in all supplied work intervals. " +
                     "Merge overlapping and touching intervals. " +
                     "Dates use yyyy-MM-dd; endDate is exclusive. " +
                     "A null endDate requires the supplied evaluationDate.",
@@ -77,7 +96,9 @@ public static class ExperienceAssistant
 
         // Let the framework call the function and send its result back to the model.
         var aiClientFactory = new AiClientFactory();
-        using IChatClient iChatClient = new FunctionInvokingChatClient(aiClientFactory.CreateClient(providerSettings, httpClient))
+        using IChatClient iChatClient = new FunctionInvokingChatClient(aiClientFactory.CreateClient(
+            providerSettings,
+            httpClient))
         {
             // One tool round trip: select the function, then request the final answer.
             MaximumIterationsPerRequest = 1,
@@ -104,7 +125,9 @@ public static class ExperienceAssistant
 
         OutputPrinter.PrintRequestDetails(providerSettings);
 
-        AgentResponse agentResponse = await chatClientAgent.RunAsync(inputString, cancellationToken: deadlineCancellationTokenSource.Token);
+        AgentResponse agentResponse = await chatClientAgent.RunAsync(
+            inputString,
+            cancellationToken: deadlineCancellationTokenSource.Token);
 
         // A tool-selection preamble cannot replace a complete final assistant answer.
         if (agentResponse.FinishReason == ChatFinishReason.Length)
@@ -112,30 +135,39 @@ public static class ExperienceAssistant
             throw new InvalidDataException("The provider truncated its response at the output token limit.");
         }
 
-        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage => chatMessage.Role == ChatRole.Assistant)?.Text;
+        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage =>
+            chatMessage.Role == ChatRole.Assistant)?.Text;
         if (string.IsNullOrWhiteSpace(answerString))
         {
-            throw new InvalidDataException("The provider returned no response text. Check the model and its reasoning/output token budget.");
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
         }
 
         return agentResponse;
     }
 
     // A valid date can still be invented: accept only the exact intervals and reference date supplied.
-    private static ExperienceResult CalculateForSource(ExperienceInputs sourceExperienceInputs, List<WorkInterval> workIntervals,
-        string? evaluationDateString, CancellationToken cancellationToken)
+    private static ExperienceResult CalculateForSource(
+        ExperienceInputs sourceExperienceInputs,
+        List<WorkInterval> workIntervals,
+        string? evaluationDateString,
+        CancellationToken cancellationToken)
     {
         var timerStopwatch = Stopwatch.StartNew();
         bool succeededBool = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (workIntervals is null || evaluationDateString != sourceExperienceInputs.EvaluationDateString || !workIntervals.SequenceEqual(sourceExperienceInputs.WorkIntervals))
+            if (workIntervals is null || evaluationDateString != sourceExperienceInputs.EvaluationDateString
+                || !workIntervals.SequenceEqual(sourceExperienceInputs.WorkIntervals))
             {
-                throw new InvalidDataException("Tool arguments must preserve every supplied interval and the evaluation date.");
+                throw new InvalidDataException(
+                    "Tool arguments must preserve every supplied interval and the evaluation date.");
             }
 
-            ExperienceResult experienceResult = ExperienceCalculator.CalculateExperience(workIntervals, evaluationDateString);
+            ExperienceResult experienceResult = ExperienceCalculator.CalculateExperience(
+                workIntervals,
+                evaluationDateString);
             cancellationToken.ThrowIfCancellationRequested();
             succeededBool = true;
 
@@ -144,7 +176,10 @@ public static class ExperienceAssistant
         finally
         {
             // Keep private arguments and exception contents out of the execution log.
-            OutputPrinter.PrintToolExecution(ToolNameString, timerStopwatch.ElapsedMilliseconds, succeededBool);
+            OutputPrinter.PrintToolExecution(
+                ToolNameString,
+                timerStopwatch.ElapsedMilliseconds,
+                succeededBool);
         }
     }
 

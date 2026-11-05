@@ -5,7 +5,10 @@ public static class SearchInputsValidator
     public const int MaximumProjectsInt = 100;
 
     // Check every local input before the first paid request, including projects near the end of the file.
-    public static void Validate(List<ProjectDescription> projectDescriptions, string queryString, int topKInt)
+    public static void Validate(
+        List<ProjectDescription> projectDescriptions,
+        string queryString,
+        int topKInt)
     {
         ValidateQuery(queryString);
         ValidateTopK(topKInt);
@@ -17,7 +20,8 @@ public static class SearchInputsValidator
     {
         if (string.IsNullOrWhiteSpace(queryString) || queryString.Length > MaximumQueryCharactersInt)
         {
-            throw new ArgumentException($"The query must contain between 1 and {MaximumQueryCharactersInt} characters.",
+            throw new ArgumentException(
+                $"The query must contain between 1 and {MaximumQueryCharactersInt} characters.",
                 nameof(queryString));
         }
     }
@@ -27,7 +31,9 @@ public static class SearchInputsValidator
     {
         if (topKInt <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(topKInt), "Top-k must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(topKInt),
+                "Top-k must be positive.");
         }
     }
 
@@ -52,17 +58,20 @@ public static class SearchInputsValidator
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(projectDescription.IdString) || !idStringsHashSet.Add(projectDescription.IdString))
+            if (string.IsNullOrWhiteSpace(projectDescription.IdString)
+                || !idStringsHashSet.Add(projectDescription.IdString))
             {
                 errorStrings.Add($"{pathString}.id: use a nonempty, unique document ID.");
             }
 
-            if (string.IsNullOrWhiteSpace(projectDescription.TextString) || projectDescription.TextString.Length > MaximumProjectCharactersInt)
+            if (string.IsNullOrWhiteSpace(projectDescription.TextString)
+                || projectDescription.TextString.Length > MaximumProjectCharactersInt)
             {
                 errorStrings.Add($"{pathString}.text: supply between 1 and {MaximumProjectCharactersInt} characters.");
             }
 
-            if (projectDescription.SkillStrings is null || projectDescription.SkillStrings.Count == 0 || projectDescription.SkillStrings.Any(string.IsNullOrWhiteSpace))
+            if (projectDescription.SkillStrings is null || projectDescription.SkillStrings.Count == 0
+                || projectDescription.SkillStrings.Any(string.IsNullOrWhiteSpace))
             {
                 errorStrings.Add($"{pathString}.skills: supply nonempty demonstrated skill names.");
             }
@@ -70,7 +79,9 @@ public static class SearchInputsValidator
 
         if (errorStrings.Count > 0)
         {
-            throw new InvalidDataException(string.Join(Environment.NewLine, errorStrings));
+            throw new InvalidDataException(string.Join(
+                Environment.NewLine,
+                errorStrings));
         }
     }
 }

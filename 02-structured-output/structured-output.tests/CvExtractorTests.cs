@@ -10,37 +10,90 @@ public class CvExtractorTests(ITestOutputHelper outputITestOutputHelper)
     [Fact]
     public async Task Native_request_preserves_the_authored_schema_and_passes_the_complete_pipeline()
     {
+        // Arrange
         string resumeString = ProfileTestData.ReadSample("resume.md");
-        using var profileResponseHandler = new ProfileResponseHandler(ProfileTestData.ReadSample("profile.example.json"));
+        using var profileResponseHandler =
+            new ProfileResponseHandler(ProfileTestData.ReadSample("profile.example.json"));
         using var httpClient = new HttpClient(profileResponseHandler);
-        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(resumeString, "resume.md",
-            new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient);
+
+        // Act
+        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(
+            resumeString,
+            "resume.md",
+            new(
+                "OpenRouter",
+                "test-key",
+                "test-model",
+                new Uri("https://example.invalid/v1")),
+            httpClient);
         JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
         CandidateProfile candidateProfile = agentResponse.Result;
-        ProfileValidator.ValidateProfile(candidateProfile, resumeString, "resume.md");
+        ProfileValidator.ValidateProfile(
+            candidateProfile,
+            resumeString,
+            "resume.md");
         CandidateProfile normalizedCandidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
+
         // Member names may change in C# while the displayed JSON must still satisfy the authored schema.
-        JsonResumeSchemaValidator.ValidateSchema(JsonSerializer.Serialize(normalizedCandidateProfile, JsonSerializerOptions.Web));
-        Assert.Equal("Mira Example", normalizedCandidateProfile.NameString);
-        using JsonDocument requestJsonDocument = JsonDocument.Parse(Assert.Single(profileResponseHandler.RequestBodyStrings));
-        JsonElement schemaJsonElement = requestJsonDocument.RootElement.GetProperty("response_format").GetProperty("json_schema");
-        using JsonDocument authoredJsonDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "profile.schema.json")));
-        Assert.True(JsonElement.DeepEquals(authoredJsonDocument.RootElement, schemaJsonElement.GetProperty("schema")));
+        JsonResumeSchemaValidator.ValidateSchema(JsonSerializer.Serialize(
+            normalizedCandidateProfile,
+            JsonSerializerOptions.Web));
+
+        // Assert
+        Assert.Equal(
+            "Mira Example",
+            normalizedCandidateProfile.NameString);
+        using JsonDocument requestJsonDocument =
+            JsonDocument.Parse(Assert.Single(profileResponseHandler.RequestBodyStrings));
+        JsonElement schemaJsonElement =
+            requestJsonDocument.RootElement.GetProperty("response_format").GetProperty("json_schema");
+        using JsonDocument authoredJsonDocument =
+            JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                AppContext.BaseDirectory,
+                "profile.schema.json")));
+        Assert.True(JsonElement.DeepEquals(
+            authoredJsonDocument.RootElement,
+            schemaJsonElement.GetProperty("schema")));
         Assert.True(schemaJsonElement.GetProperty("strict").GetBoolean());
     }
 
     // A successful HTTP response still needs complete assistant text before schema validation.
     [Theory]
-    [InlineData("", "stop", "no response text")]
-    [InlineData("{}", "length", "truncated")]
-    public async Task Native_request_rejects_empty_and_truncated_answers(string answerString, string finishReasonString, string expectedErrorString)
+    [InlineData(
+        "",
+        "stop",
+        "no response text")]
+    [InlineData(
+        "{}",
+        "length",
+        "truncated")]
+    public async Task Native_request_rejects_empty_and_truncated_answers(
+        string answerString,
+        string finishReasonString,
+        string expectedErrorString)
     {
-        using var profileResponseHandler = new ProfileResponseHandler(answerString, finishReasonString);
+        // Arrange
+        using var profileResponseHandler = new ProfileResponseHandler(
+            answerString,
+            finishReasonString);
         using var httpClient = new HttpClient(profileResponseHandler);
+
+        // Act
         InvalidDataException invalidDataException = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            CvExtractor.ExtractAsync(ProfileTestData.ReadSample("resume.md"), "resume.md",
-                new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient));
-        Assert.Contains(expectedErrorString, invalidDataException.Message);
+            CvExtractor.ExtractAsync(
+                ProfileTestData.ReadSample("resume.md"),
+                "resume.md",
+                new(
+                    "OpenRouter",
+                    "test-key",
+                    "test-model",
+                    new Uri("https://example.invalid/v1")),
+                httpClient));
+
+        // Assert
+        Assert.Contains(
+            expectedErrorString,
+            invalidDataException.Message);
         Assert.Single(profileResponseHandler.RequestBodyStrings);
     }
 
@@ -50,67 +103,128 @@ public class CvExtractorTests(ITestOutputHelper outputITestOutputHelper)
     [InlineData(false)]
     public async Task Caller_cancellation_stops_the_extractor(bool cancelBeforeBool)
     {
+        // Arrange
         using var cancellationTokenSource = new CancellationTokenSource();
-        using var profileResponseHandler = new ProfileResponseHandler("{}", beforeResponseAction: cancellationTokenSource.Cancel);
+        using var profileResponseHandler = new ProfileResponseHandler(
+            "{}",
+            beforeResponseAction: cancellationTokenSource.Cancel);
         using var httpClient = new HttpClient(profileResponseHandler);
         if (cancelBeforeBool)
         {
             cancellationTokenSource.Cancel();
         }
+
+        // Act
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CvExtractor.ExtractAsync(ProfileTestData.ReadSample("resume.md"), "resume.md",
-                new("OpenRouter", "test-key", "test-model", new Uri("https://example.invalid/v1")), httpClient,
+            CvExtractor.ExtractAsync(
+                ProfileTestData.ReadSample("resume.md"),
+                "resume.md",
+                new(
+                    "OpenRouter",
+                    "test-key",
+                    "test-model",
+                    new Uri("https://example.invalid/v1")),
+                httpClient,
                 cancellationTokenSource.Token));
-        Assert.Equal(cancelBeforeBool ? 0 : 1, profileResponseHandler.RequestBodyStrings.Count);
+
+        // Assert
+        Assert.Equal(
+            cancelBeforeBool ? 0 : 1,
+            profileResponseHandler.RequestBodyStrings.Count);
     }
 
     // A local fixture checks the post-request stages without credentials or a model call.
     [Fact]
     public void Example_response_passes_schema_conversion_evidence_and_normalization()
     {
+        // Arrange
         string rawStringResume = ProfileTestData.ReadSample("resume.md");
         string jsonResumeString = ProfileTestData.ReadSample("profile.example.json");
-        var rawAgentResponse = new AgentResponse(new ChatMessage(ChatRole.Assistant, jsonResumeString));
-        var agentResponse = new AgentResponse<CandidateProfile>(rawAgentResponse, JsonSerializerOptions.Web);
+        var rawAgentResponse = new AgentResponse(new ChatMessage(
+            ChatRole.Assistant,
+            jsonResumeString));
 
-        Assert.Equal(jsonResumeString, agentResponse.Text);
+        // Act
+        var agentResponse = new AgentResponse<CandidateProfile>(
+            rawAgentResponse,
+            JsonSerializerOptions.Web);
+
+        // Assert
+        Assert.Equal(
+            jsonResumeString,
+            agentResponse.Text);
+
+        // Act
         JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
         CandidateProfile candidateProfile = agentResponse.Result;
-        ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, "resume.md");
+        ProfileValidator.ValidateProfile(
+            candidateProfile,
+            rawStringResume,
+            "resume.md");
         candidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
-        Assert.Equal("Mira Example", candidateProfile.NameString);
-        Assert.Equal(2, candidateProfile.Experiences.Count);
+
+        // Assert
+        Assert.Equal(
+            "Mira Example",
+            candidateProfile.NameString);
+        Assert.Equal(
+            2,
+            candidateProfile.Experiences.Count);
     }
 
     // Model responses pass through the same local checks and cleanup as Program.cs.
     [Theory]
-    [InlineData("resume.md", false)]
-    [InlineData("resume-ambiguous.md", true)]
-    [Trait("Category", "Integration")]
-    public async Task Extract_returns_a_typed_profile_and_preserves_unknowns(string resumeFileNameString, bool hasMissingFactsBool)
+    [InlineData(
+        "resume.md",
+        false)]
+    [InlineData(
+        "resume-ambiguous.md",
+        true)]
+    [Trait(
+        "Category",
+        "Integration")]
+    public async Task Extract_returns_a_typed_profile_and_preserves_unknowns(
+        string resumeFileNameString,
+        bool hasMissingFactsBool)
     {
+        // Arrange
         string rawStringResume = ProfileTestData.ReadSample(resumeFileNameString);
-        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(rawStringResume, resumeFileNameString);
+
+        // Act
+        AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(
+            rawStringResume,
+            resumeFileNameString);
         JsonResumeSchemaValidator.ValidateSchema(agentResponse.Text);
         CandidateProfile candidateProfile = agentResponse.Result;
-        ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, resumeFileNameString);
+        ProfileValidator.ValidateProfile(
+            candidateProfile,
+            rawStringResume,
+            resumeFileNameString);
         candidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);
 
         JsonSerializerOptions jsonSerializerOptions = new(JsonSerializerDefaults.Web)
         {
             WriteIndented = true
         };
-        outputITestOutputHelper.WriteLine(JsonSerializer.Serialize(candidateProfile, jsonSerializerOptions));
+        outputITestOutputHelper.WriteLine(JsonSerializer.Serialize(
+            candidateProfile,
+            jsonSerializerOptions));
 
         AssertPopulatedProfile(candidateProfile);
+
+        // Assert
         if (hasMissingFactsBool)
         {
             AssertMissingFacts(candidateProfile);
         }
         else
         {
-            Assert.Equal(2, candidateProfile.Experiences.Count);
-            Assert.Contains(candidateProfile.Educations, itemEducation => itemEducation.DegreeString is not null);
+            Assert.Equal(
+                2,
+                candidateProfile.Experiences.Count);
+            Assert.Contains(
+                candidateProfile.Educations,
+                itemEducation => itemEducation.DegreeString is not null);
         }
     }
 
@@ -127,7 +241,9 @@ public class CvExtractorTests(ITestOutputHelper outputITestOutputHelper)
     private static void AssertMissingFacts(CandidateProfile candidateProfile)
     {
         Assert.Null(candidateProfile.PhoneString);
-        Assert.All(candidateProfile.Educations, itemEducation => Assert.Null(itemEducation.DegreeString));
+        Assert.All(
+            candidateProfile.Educations,
+            itemEducation => Assert.Null(itemEducation.DegreeString));
         Assert.All(
             candidateProfile.Experiences,
             itemExperience =>
@@ -136,7 +252,11 @@ public class CvExtractorTests(ITestOutputHelper outputITestOutputHelper)
             Assert.Null(itemExperience.EndDateString);
             Assert.Null(itemExperience.DurationMonthsInt);
         });
-        Assert.All(candidateProfile.Skills, itemSkill => Assert.Null(itemSkill.ProficiencyString));
-        Assert.Equal(2, candidateProfile.Skills.Count);
+        Assert.All(
+            candidateProfile.Skills,
+            itemSkill => Assert.Null(itemSkill.ProficiencyString));
+        Assert.Equal(
+            2,
+            candidateProfile.Skills.Count);
     }
 }

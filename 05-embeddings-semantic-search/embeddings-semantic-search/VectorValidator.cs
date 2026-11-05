@@ -1,7 +1,9 @@
 public static class VectorValidator
 {
     // Zero, nonfinite, or differently sized vectors cannot be used for this cosine comparison.
-    public static void Validate(ReadOnlySpan<float> vectorReadOnlySpan, int expectedDimensionsInt)
+    public static void Validate(
+        ReadOnlySpan<float> vectorReadOnlySpan,
+        int expectedDimensionsInt)
     {
         if (expectedDimensionsInt <= 0 || vectorReadOnlySpan.Length != expectedDimensionsInt)
         {

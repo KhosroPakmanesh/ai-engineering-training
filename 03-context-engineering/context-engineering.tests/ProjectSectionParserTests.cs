@@ -6,6 +6,9 @@ public class ProjectSectionParserTests
     [Fact]
     public void Duplicate_section_ids_are_rejected()
     {
-        Assert.Throws<InvalidDataException>(() => ProjectSectionParser.ParseProjectSection("## [P1] One\nText\n## [P1] Two\nMore text"));
+        // Act
+        // Assert
+        Assert.Throws<InvalidDataException>(() =>
+            ProjectSectionParser.ParseProjectSection("## [P1] One\nText\n## [P1] Two\nMore text"));
     }
 }

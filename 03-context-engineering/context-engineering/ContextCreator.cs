@@ -8,21 +8,33 @@ public static class ContextCreator
         List<ContextStrategy> contextStrategies =
         [
             FullContextStrategy.Prepare(comparisonInputs.ProjectSections),
-            SelectedContextStrategy.Prepare(comparisonInputs.ProjectSections, comparisonInputs.QuestionString)
+            SelectedContextStrategy.Prepare(
+                comparisonInputs.ProjectSections,
+                comparisonInputs.QuestionString)
         ];
 
-        return PrepareContext(contextStrategies, comparisonInputs.QuestionString);
+        return PrepareContext(
+            contextStrategies,
+            comparisonInputs.QuestionString);
     }
 
     // Stop if a prompt is too long; do not remove source text to make it fit.
-    private static List<PreparedContext> PrepareContext(List<ContextStrategy> selectedContextStrategies, string questionString)
+    private static List<PreparedContext> PrepareContext(
+        List<ContextStrategy> selectedContextStrategies,
+        string questionString)
     {
         List<PreparedContext> preparedContexts = selectedContextStrategies
-            .Select(contextStrategy => new PreparedContext(contextStrategy, BuildContext(questionString, contextStrategy))).ToList();
+            .Select(contextStrategy => new PreparedContext(
+                contextStrategy,
+                BuildContext(
+                    questionString,
+                    contextStrategy)))
+            .ToList();
 
         foreach (PreparedContext preparedContext in preparedContexts)
         {
-            if (ContextCreatorHelpers.SystemInstructionsString.Length + preparedContext.PromptString.Length > ContextCreatorHelpers.PromptCharacterCapInt)
+            if (ContextCreatorHelpers.SystemInstructionsString.Length + preparedContext.PromptString
+                .Length > ContextCreatorHelpers.PromptCharacterCapInt)
             {
                 throw new InvalidDataException(
                     $"The complete prompt exceeds {ContextCreatorHelpers.PromptCharacterCapInt} characters. " +
@@ -34,7 +46,9 @@ public static class ContextCreator
     }
 
     // Put the question and original project text in JSON so the model receives them as data.
-    private static string BuildContext(string questionString, ContextStrategy contextStrategy)
+    private static string BuildContext(
+        string questionString,
+        ContextStrategy contextStrategy)
     {
         JsonSerializerOptions jsonSerializerOptions = new(JsonSerializerDefaults.Web)
         {
@@ -56,9 +70,14 @@ public static class ContextCreator
     }
 
     // Keep each selected section whole and stop if the combined text exceeds the limit.
-    public static ContextStrategy CreateContext(List<ProjectSection> includedProjectSections, string strategyString, int characterCapInt)
+    public static ContextStrategy CreateContext(
+        List<ProjectSection> includedProjectSections,
+        string strategyString,
+        int characterCapInt)
     {
-        string contextString = string.Join("\n\n", includedProjectSections.Select(projectSection => projectSection.TextString));
+        string contextString = string.Join(
+            "\n\n",
+            includedProjectSections.Select(projectSection => projectSection.TextString));
 
         if (contextString.Length > characterCapInt)
         {
@@ -67,6 +86,9 @@ public static class ContextCreator
                 "Shorten the source document. No content was clipped.");
         }
 
-        return new(strategyString, includedProjectSections, contextString);
+        return new(
+            strategyString,
+            includedProjectSections,
+            contextString);
     }
 }

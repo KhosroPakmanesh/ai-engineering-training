@@ -1,18 +1,21 @@
-
 using System.Text.Json;
-
-
-
 
 public static class ComparisonInputsLoader
 {
     // Use the same project text and expected project IDs in console runs and tests.
-    public static async Task<ComparisonInputs> LoadComparisonInputsAsync(string questionString, string sourceFileString,
+    public static async Task<ComparisonInputs> LoadComparisonInputsAsync(
+        string questionString,
+        string sourceFileString,
         CancellationToken cancellationToken = default)
     {
         string folderString = AppContext.BaseDirectory;
 
-        string markdownString = await File.ReadAllTextAsync(Path.Combine(folderString, "SampleData", sourceFileString), cancellationToken);
+        string markdownString = await File.ReadAllTextAsync(
+            Path.Combine(
+                folderString,
+                "SampleData",
+                sourceFileString),
+            cancellationToken);
         List<ProjectSection> projectSections = ProjectSectionParser.ParseProjectSection(markdownString);
 
         if (projectSections.Count < 6)
@@ -25,13 +28,23 @@ public static class ComparisonInputsLoader
             WriteIndented = true
         };
         List<QuestionFixture> questionFixtures = JsonSerializer.Deserialize<List<QuestionFixture>>(
-            await File.ReadAllTextAsync(Path.Combine(folderString, "SampleData", "questions.json"), cancellationToken),
+            await File.ReadAllTextAsync(
+                Path.Combine(
+                    folderString,
+                    "SampleData",
+                    "questions.json"),
+                cancellationToken),
             jsonSerializerOptions)
             ?? throw new InvalidDataException("The question fixtures are missing.");
 
         List<string>? expectedIdStrings = questionFixtures.FirstOrDefault(questionFixture =>
-            questionFixture.QuestionString.Equals(questionString.Trim(), StringComparison.OrdinalIgnoreCase))?.ExpectedSectionIdStrings;
+            questionFixture.QuestionString.Equals(
+                questionString.Trim(),
+                StringComparison.OrdinalIgnoreCase))?.ExpectedSectionIdStrings;
 
-        return new(questionString, projectSections, expectedIdStrings);
+        return new(
+            questionString,
+            projectSections,
+            expectedIdStrings);
     }
 }

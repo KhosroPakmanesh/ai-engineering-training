@@ -12,11 +12,16 @@ public static class ResumeSummarizer
         """;
 
     // Use a separate conversation for each prompt so earlier summaries cannot affect the answer.
-    public static async Task<string> SummarizeAsync(PreparedPrompt preparedPrompt, ProviderSettings providerSettings,
-        HttpClient? httpClient = null, CancellationToken cancellationToken = default)
+    public static async Task<string> SummarizeAsync(
+        PreparedPrompt preparedPrompt,
+        ProviderSettings providerSettings,
+        HttpClient? httpClient = null,
+        CancellationToken cancellationToken = default)
     {
         var aiClientFactory = new AiClientFactory();
-        using IChatClient iChatClient = aiClientFactory.CreateClient(providerSettings, httpClient);
+        using IChatClient iChatClient = aiClientFactory.CreateClient(
+            providerSettings,
+            httpClient);
         ChatClientAgent chatClientAgent = new(
             iChatClient,
             new ChatClientAgentOptions
@@ -35,7 +40,8 @@ public static class ResumeSummarizer
         using var deadlineCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadlineCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(AiClientFactory.RequestTimeoutSeconds));
 
-        AgentResponse agentResponse = await chatClientAgent.RunAsync(preparedPrompt.TextString,
+        AgentResponse agentResponse = await chatClientAgent.RunAsync(
+            preparedPrompt.TextString,
             cancellationToken: deadlineCancellationTokenSource.Token);
 
         // A completed HTTP request can still contain an empty or cut-short answer.
@@ -44,10 +50,12 @@ public static class ResumeSummarizer
             throw new InvalidDataException("The provider truncated its response at the output token limit.");
         }
 
-        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage => chatMessage.Role == ChatRole.Assistant)?.Text;
+        string? answerString = agentResponse.Messages.LastOrDefault(chatMessage =>
+            chatMessage.Role == ChatRole.Assistant)?.Text;
         if (string.IsNullOrWhiteSpace(answerString))
         {
-            throw new InvalidDataException("The provider returned no response text. Check the model and its reasoning/output token budget.");
+            throw new InvalidDataException(
+                "The provider returned no response text. Check the model and its reasoning/output token budget.");
         }
 
         return answerString;

@@ -189,6 +189,8 @@ Tests use Microsoft.NET.Test.Sdk 18.11.0, xunit 2.9.3, and xunit.runner.visualst
 
 [TestData/EmbeddingTestData.cs](../embeddings-semantic-search.tests/TestData/EmbeddingTestData.cs) reads fresh copied inputs and supplies local HTTP responses. Shared factory and configuration checks stay in [shared.tests](../../shared/shared.tests/shared.tests.csproj), including Gemini's omitted-zero behavior. [EmbeddingResponseOrderPolicyTests.cs](../../shared/shared.tests/Providers/EmbeddingResponseOrderPolicyTests.cs) checks out-of-order response mapping, metadata preservation, and rejection of duplicate, missing, negative, and out-of-range indexes through Microsoft's real adapter. Database tests use unique temporary paths and clean up even after failures.
 
+[TestData/EmbeddingResponseHandler.cs](../embeddings-semantic-search.tests/TestData/EmbeddingResponseHandler.cs) owns the HTTP test transport separately from the input and response preparation in EmbeddingTestData.cs.
+
 From the repository root, run deterministic checks with zero real API requests:
 
 ```sh

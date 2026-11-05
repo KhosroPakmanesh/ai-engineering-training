@@ -13,7 +13,9 @@ try
     string folderString = AppContext.BaseDirectory;
 
     // 2. Read the source before requesting a profile.
-    string rawStringResume = await File.ReadAllTextAsync(Path.Combine(folderString, resumeFileString));
+    string rawStringResume = await File.ReadAllTextAsync(Path.Combine(
+        folderString,
+        resumeFileString));
 
     // 3. Explain the source and acceptance checks.
     OutputPrinter.PrintIntroduction(resumeFileNameString);
@@ -23,7 +25,9 @@ try
     //------------------------------------------------------------------------//
 
     // 1. The model proposes a JSON profile; local checks decide whether to accept it.
-    AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(rawStringResume, resumeFileNameString);
+    AgentResponse<CandidateProfile> agentResponse = await CvExtractor.ExtractAsync(
+        rawStringResume,
+        resumeFileNameString);
 
     //------------------------------------------------------------------------//
     //                      VALIDATION AND NORMALIZATION                      //
@@ -36,7 +40,10 @@ try
     CandidateProfile candidateProfile = agentResponse.Result;
 
     // 3. Correct JSON structure is not enough: each fact also needs an exact quote from the resume.
-    ProfileValidator.ValidateProfile(candidateProfile, rawStringResume, resumeFileNameString);
+    ProfileValidator.ValidateProfile(
+        candidateProfile,
+        rawStringResume,
+        resumeFileNameString);
 
     // 4. Trim skill names and remove duplicates only after their evidence has passed the checks.
     CandidateProfile normalizedCandidateProfile = ProfileNormalizer.NormalizeProfile(candidateProfile);

@@ -8,6 +8,8 @@ public class ComparisonInputsValidatorTests
     [InlineData(" ")]
     public void Empty_questions_are_rejected(string questionString)
     {
+        // Act
+        // Assert
         Assert.Throws<ArgumentException>(() => ComparisonInputsValidator.ValidateQuestion(questionString));
     }
 
@@ -15,6 +17,10 @@ public class ComparisonInputsValidatorTests
     [Fact]
     public void Oversized_question_is_rejected()
     {
-        Assert.Throws<ArgumentException>(() => ComparisonInputsValidator.ValidateQuestion(new string('x', 501)));
+        // Act
+        // Assert
+        Assert.Throws<ArgumentException>(() => ComparisonInputsValidator.ValidateQuestion(new string(
+            'x',
+            501)));
     }
 }

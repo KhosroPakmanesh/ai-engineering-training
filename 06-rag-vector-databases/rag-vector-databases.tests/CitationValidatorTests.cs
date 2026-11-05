@@ -12,16 +12,38 @@ public class CitationValidatorTests
     [InlineData("Docker work [project-b.md#chunk-01].")]
     public void Missing_unknown_or_excluded_citations_are_rejected(string answerString)
     {
-        List<RetrievedChunk> selectedRetrievedChunks = [new(RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk, 0.9)];
-        Assert.Throws<InvalidDataException>(() => CitationValidator.Validate(answerString, CitationParser.Parse(answerString), selectedRetrievedChunks));
+        // Arrange
+        List<RetrievedChunk> selectedRetrievedChunks =
+        [
+            new(
+            RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk,
+            0.9)
+        ];
+
+        // Act
+        // Assert
+        Assert.Throws<InvalidDataException>(() => CitationValidator.Validate(
+            answerString,
+            CitationParser.Parse(answerString),
+            selectedRetrievedChunks));
     }
 
     // Source membership is checked separately from the learner's review of factual meaning.
     [Fact]
     public void Supplied_citation_is_accepted()
     {
+        // Arrange
         const string answerString = "Mira packaged an API [project-a.md#chunk-01].";
-        CitationValidator.Validate(answerString, CitationParser.Parse(answerString),
-            [new(RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk, 0.9)]);
+
+        // Act
+        // Assert
+        CitationValidator.Validate(
+            answerString,
+            CitationParser.Parse(answerString),
+            [
+                new(
+                RagFixtures.CreateIndex().IndexedChunks[0].DocumentChunk,
+                0.9)
+            ]);
     }
 }

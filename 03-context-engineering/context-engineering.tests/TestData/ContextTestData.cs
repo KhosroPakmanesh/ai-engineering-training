@@ -6,14 +6,20 @@ internal static class ContextTestData
     public static List<ProjectSection> ReadSections()
     {
         return ProjectSectionParser.ParseProjectSection(
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "SampleData", "projects.md")));
+            File.ReadAllText(Path.Combine(
+                AppContext.BaseDirectory,
+                "SampleData",
+                "projects.md")));
     }
 
     // The example data lists expected project IDs without requiring exact answer wording.
     public static List<QuestionFixture> ReadFixtures()
     {
         return JsonSerializer.Deserialize<List<QuestionFixture>>(
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "SampleData", "questions.json")),
+            File.ReadAllText(Path.Combine(
+                AppContext.BaseDirectory,
+                "SampleData",
+                "questions.json")),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
 }

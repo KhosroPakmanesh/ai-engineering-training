@@ -1,0 +1,14 @@
+[
+  {
+    "id": "alex",
+    "name": "Alex Morgan (fictional)",
+    "summary": "Built a fictional library reservation API with C# and .NET. Stored book availability in PostgreSQL and packaged the API with Docker.",
+    "skills": ["C#", ".NET", "PostgreSQL", "Docker"]
+  },
+  {
+    "id": "sam",
+    "name": "Sam Rivera (fictional)",
+    "summary": "Built a fictional community garden dashboard with TypeScript and React. Used SQLite for planting records and wrote Playwright browser checks.",
+    "skills": ["TypeScript", "React", "SQLite", "Playwright"]
+  }
+]

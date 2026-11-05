@@ -12,14 +12,17 @@ try
 
     // 2. Expected project IDs let us check whether each context includes the project needed to answer.
     ComparisonInputs comparisonInputs = await ComparisonInputsLoader
-        .LoadComparisonInputsAsync(questionString, sourceFileString);
+        .LoadComparisonInputsAsync(
+            questionString,
+            sourceFileString);
 
     // 3. Prepare and size-check both prompts before sending the first request.
-    List<PreparedContext> preparedContexts =
-        ContextCreator.CreateContextStrategies(comparisonInputs);
+    List<PreparedContext> preparedContexts = ContextCreator.CreateContextStrategies(comparisonInputs);
 
     // 4. Explain what changes and what stays fixed.
-    OutputPrinter.PrintIntroduction(questionString, sourceFileString);
+    OutputPrinter.PrintIntroduction(
+        questionString,
+        sourceFileString);
 
     //------------------------------------------------------------------------//
     //                               COMPARISON                               //
@@ -27,14 +30,19 @@ try
 
     // 1. Change only the supplied context while keeping the question and settings fixed.
     ComparisonReport comparisonReport = await ContextComparer.
-        CompareContextAsync(sourceFileString, comparisonInputs, preparedContexts);
+        CompareContextAsync(
+            sourceFileString,
+            comparisonInputs,
+            preparedContexts);
 
     //------------------------------------------------------------------------//
     //                          RESULTS AND TAKEAWAY                          //
     //------------------------------------------------------------------------//
 
     // 1. Show each answer with its prompt size, request time, and any failed evidence checks.
-    OutputPrinter.PrintResults(comparisonReport, comparisonInputs.ProjectSections);
+    OutputPrinter.PrintResults(
+        comparisonReport,
+        comparisonInputs.ProjectSections);
     OutputPrinter.PrintTakeaway();
 
     return comparisonReport.ContextResults.All(contextResult => contextResult.EvidenceFlagStrings.Count == 0) ? 0 : 1;

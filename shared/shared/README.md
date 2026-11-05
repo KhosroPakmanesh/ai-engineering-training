@@ -133,6 +133,8 @@ Shared tests exercise registered provider strategies through the real SDK and fr
 | [Providers/EmbeddingResponseOrderPolicyTests.cs](../shared.tests/Providers/EmbeddingResponseOrderPolicyTests.cs) | Input ordering, metadata preservation, and rejection of duplicate, missing, negative, and out-of-range embedding indexes. |
 | [Providers/AiRetryPolicyTests.cs](../shared.tests/Providers/AiRetryPolicyTests.cs) | Request preservation, retry limits, permanent errors, Retry-After, cancellation, and synchronous SDK calls. |
 
+The HTTP handlers and recording retry policy have separate files beside their tests: [AiClientFactoryTests.ResponseHandler.cs](../shared.tests/AiClientFactoryTests.ResponseHandler.cs), [Providers/AiRetryPolicyTests.ResponseHandler.cs](../shared.tests/Providers/AiRetryPolicyTests.ResponseHandler.cs), [Providers/AiRetryPolicyTests.RecordingRetryPolicy.cs](../shared.tests/Providers/AiRetryPolicyTests.RecordingRetryPolicy.cs), and [Providers/EmbeddingResponseOrderPolicyTests.ResponseHandler.cs](../shared.tests/Providers/EmbeddingResponseOrderPolicyTests.ResponseHandler.cs). Partial containing test classes preserve each nested helper's existing name and visibility.
+
 From the repository root, run:
 
 ```sh

@@ -5,17 +5,28 @@ using System.Text.Json.Nodes;
 internal sealed class EmbeddingResponseOrderPolicy : PipelinePolicy
 {
     // Support the SDK's synchronous path with the same index checks and ordering.
-    public override void Process(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies, int currentIndexInt)
+    public override void Process(
+        PipelineMessage pipelineMessage,
+        IReadOnlyList<PipelinePolicy> pipelinePolicies,
+        int currentIndexInt)
     {
-        ProcessNext(pipelineMessage, pipelinePolicies, currentIndexInt);
+        ProcessNext(
+            pipelineMessage,
+            pipelinePolicies,
+            currentIndexInt);
         OrderByInputIndex(pipelineMessage);
     }
 
     // Apply the wire-format checks after HTTP completes and before the SDK converts the response.
-    public override async ValueTask ProcessAsync(PipelineMessage pipelineMessage, IReadOnlyList<PipelinePolicy> pipelinePolicies,
+    public override async ValueTask ProcessAsync(
+        PipelineMessage pipelineMessage,
+        IReadOnlyList<PipelinePolicy> pipelinePolicies,
         int currentIndexInt)
     {
-        await ProcessNextAsync(pipelineMessage, pipelinePolicies, currentIndexInt);
+        await ProcessNextAsync(
+            pipelineMessage,
+            pipelinePolicies,
+            currentIndexInt);
         OrderByInputIndex(pipelineMessage);
     }
 
@@ -38,10 +49,13 @@ internal sealed class EmbeddingResponseOrderPolicy : PipelinePolicy
         bool alreadyOrderedBool = true;
         for (int positionInt = 0; positionInt < dataJsonArray.Count; positionInt++)
         {
-            if (dataJsonArray[positionInt] is not JsonObject itemJsonObject || itemJsonObject["index"] is not JsonValue indexJsonValue ||
-                !indexJsonValue.TryGetValue(out int inputIndexInt) || inputIndexInt < 0 || inputIndexInt >= dataJsonArray.Count || !indexeIntsHashSet.Add(inputIndexInt))
+            if (dataJsonArray[positionInt] is not JsonObject itemJsonObject
+                || itemJsonObject["index"] is not JsonValue indexJsonValue ||
+                !indexJsonValue.TryGetValue(out int inputIndexInt) || inputIndexInt < 0
+                || inputIndexInt >= dataJsonArray.Count || !indexeIntsHashSet.Add(inputIndexInt))
             {
-                throw new InvalidDataException("Embedding indexes must identify each input exactly once, from zero to input count minus one.");
+                throw new InvalidDataException(
+                    "Embedding indexes must identify each input exactly once, from zero to input count minus one.");
             }
 
             if (inputIndexInt != positionInt)
@@ -55,7 +69,8 @@ internal sealed class EmbeddingResponseOrderPolicy : PipelinePolicy
         }
 
         var orderedDataJsonArray = new JsonArray();
-        foreach (JsonNode? entryJsonNode in dataJsonArray.OrderBy(entryJsonNode => entryJsonNode!["index"]!.GetValue<int>()))
+        foreach (JsonNode? entryJsonNode in dataJsonArray.OrderBy(entryJsonNode =>
+            entryJsonNode!["index"]!.GetValue<int>()))
         {
             orderedDataJsonArray.Add(entryJsonNode!.DeepClone());
         }

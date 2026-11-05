@@ -3,7 +3,10 @@ using Microsoft.Extensions.VectorData;
 public static class SemanticSearch
 {
     // Validated index and query vectors have length one; their dot product is exact cosine search over every row.
-    public static List<SearchResult> Rank(SearchIndex searchIndex, List<float> normalizedQueryFloats, int topKInt)
+    public static List<SearchResult> Rank(
+        SearchIndex searchIndex,
+        List<float> normalizedQueryFloats,
+        int topKInt)
     {
         if (topKInt <= 0)
         {
@@ -17,7 +20,8 @@ public static class SemanticSearch
             double scoreDouble = 0;
             for (int dimensionInt = 0; dimensionInt < searchIndex.DimensionsInt; dimensionInt++)
             {
-                // We show each coordinate's contribution below. The double sum can round differently from a float result.
+                // We show each coordinate's contribution below. The double sum can round differently from a float
+                // result.
                 scoreDouble += (double)indexedProject.VectorFloats[dimensionInt] * normalizedQueryFloats[dimensionInt];
             }
 
@@ -32,21 +36,37 @@ public static class SemanticSearch
             //    CollectionsMarshal.AsSpan(indexedProject.VectorFloats),
             //    CollectionsMarshal.AsSpan(normalizedQueryFloats));
 
-            scoredProjectValueTuples.Add((indexedProject.ProjectDescription, Math.Clamp(scoreDouble, -1, 1)));
+            scoredProjectValueTuples.Add((indexedProject.ProjectDescription, Math.Clamp(
+                scoreDouble,
+                -1,
+                1)));
         }
 
-        return scoredProjectValueTuples.OrderByDescending(scoredProjectValueTuple => scoredProjectValueTuple.ScoreDouble)
-            .ThenBy(scoredProjectValueTuple => scoredProjectValueTuple.ProjectDescription.IdString, StringComparer.Ordinal)
+        return scoredProjectValueTuples
+            .OrderByDescending(scoredProjectValueTuple =>
+            scoredProjectValueTuple.ScoreDouble)
+            .ThenBy(
+                scoredProjectValueTuple => scoredProjectValueTuple.ProjectDescription.IdString,
+                StringComparer.Ordinal)
             .Take(topKInt)
-            .Select((scoredProjectValueTuple, indexInt) => new SearchResult(indexInt + 1,
-                scoredProjectValueTuple.ProjectDescription.IdString, scoredProjectValueTuple.ScoreDouble,
-                scoredProjectValueTuple.ProjectDescription.TextString[..Math.Min(scoredProjectValueTuple.ProjectDescription.TextString.Length, 90)]))
+            .Select((
+                scoredProjectValueTuple,
+                indexInt) => new SearchResult(
+                    indexInt + 1,
+                    scoredProjectValueTuple.ProjectDescription.IdString,
+                    scoredProjectValueTuple.ScoreDouble,
+                    scoredProjectValueTuple.ProjectDescription.TextString[..Math.Min(
+                        scoredProjectValueTuple.ProjectDescription.TextString.Length,
+                        90)]))
             .ToList();
     }
 
     // Search a collection configured for cosine distance and convert its distances into similarity scores.
-    public static async Task<List<SearchResult>> RankAsync(VectorStoreCollection<string, VectorProject> vectorStoreCollection,
-        SearchIndex searchIndex, ReadOnlyMemory<float> queryVectorReadOnlyMemory, int topKInt,
+    public static async Task<List<SearchResult>> RankAsync(
+        VectorStoreCollection<string, VectorProject> vectorStoreCollection,
+        SearchIndex searchIndex,
+        ReadOnlyMemory<float> queryVectorReadOnlyMemory,
+        int topKInt,
         CancellationToken cancellationToken = default)
     {
         if (topKInt <= 0)
@@ -61,19 +81,37 @@ public static class SemanticSearch
         };
         var scoredVectorProjectValueTuples = new List<(VectorProject VectorProject, double ScoreDouble)>();
         await foreach (VectorSearchResult<VectorProject> matchVectorSearchResult in
-            vectorStoreCollection.SearchAsync(queryVectorReadOnlyMemory, topKInt, vectorSearchOptions, cancellationToken))
+            vectorStoreCollection.SearchAsync(
+                queryVectorReadOnlyMemory,
+                topKInt,
+                vectorSearchOptions,
+                cancellationToken))
         {
             double? returnedScoreDouble = matchVectorSearchResult.Score;
-            double distanceDouble = returnedScoreDouble ?? throw new InvalidDataException("The store omitted its distance.");
-            scoredVectorProjectValueTuples.Add((matchVectorSearchResult.Record, Math.Clamp(1 - distanceDouble, -1, 1)));
+            double distanceDouble = returnedScoreDouble
+                ?? throw new InvalidDataException("The store omitted its distance.");
+            scoredVectorProjectValueTuples.Add((matchVectorSearchResult.Record, Math.Clamp(
+                1 - distanceDouble,
+                -1,
+                1)));
         }
 
         // Sort the returned candidates; equal scores at the top-k boundary may differ from the full scan.
-        return scoredVectorProjectValueTuples.OrderByDescending(scoredVectorProjectValueTuple => scoredVectorProjectValueTuple.ScoreDouble)
-            .ThenBy(scoredVectorProjectValueTuple => scoredVectorProjectValueTuple.VectorProject.IdString, StringComparer.Ordinal)
-            .Select((scoredVectorProjectValueTuple, indexInt) => new SearchResult(indexInt + 1,
-                scoredVectorProjectValueTuple.VectorProject.IdString, scoredVectorProjectValueTuple.ScoreDouble,
-                scoredVectorProjectValueTuple.VectorProject.TextString[..Math.Min(scoredVectorProjectValueTuple.VectorProject.TextString.Length, 90)]))
+        return scoredVectorProjectValueTuples
+            .OrderByDescending(scoredVectorProjectValueTuple =>
+            scoredVectorProjectValueTuple.ScoreDouble)
+            .ThenBy(
+                scoredVectorProjectValueTuple => scoredVectorProjectValueTuple.VectorProject.IdString,
+                StringComparer.Ordinal)
+            .Select((
+                scoredVectorProjectValueTuple,
+                indexInt) => new SearchResult(
+                    indexInt + 1,
+                    scoredVectorProjectValueTuple.VectorProject.IdString,
+                    scoredVectorProjectValueTuple.ScoreDouble,
+                    scoredVectorProjectValueTuple.VectorProject.TextString[..Math.Min(
+                        scoredVectorProjectValueTuple.VectorProject.TextString.Length,
+                        90)]))
             .ToList();
     }
 }

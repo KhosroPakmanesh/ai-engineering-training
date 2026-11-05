@@ -15,6 +15,11 @@ internal interface IAiProviderStrategy
     {
         get;
     }
-    IChatClient CreateClient(ProviderSettings providerSettings, HttpClient? httpClient);
-    IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(ProviderSettings providerSettings, HttpClient? httpClient);
+
+    IChatClient CreateClient(
+        ProviderSettings providerSettings,
+        HttpClient? httpClient);
+    IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(
+        ProviderSettings providerSettings,
+        HttpClient? httpClient);
 }

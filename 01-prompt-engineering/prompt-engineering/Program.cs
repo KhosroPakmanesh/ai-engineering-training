@@ -1,8 +1,14 @@
 List<PromptFile> promptFiles =
 [
-    new("A: Zero-shot", "Prompts/A-zero-shot.txt"),
-    new("B: Few-shot", "Prompts/B-few-shot.txt"),
-    new("C: Constrained", "Prompts/C-constrained.txt")
+    new(
+        "A: Zero-shot",
+        "Prompts/A-zero-shot.txt"),
+    new(
+            "B: Few-shot",
+            "Prompts/B-few-shot.txt"),
+    new(
+        "C: Constrained",
+        "Prompts/C-constrained.txt")
 ];
 
 try
@@ -28,7 +34,9 @@ try
     //------------------------------------------------------------------------//
 
     // 1. Compare the prepared prompts in independent conversations.
-    await PromptComparer.ComparePromptsAsync(preparedPrompts, providerSettings);
+    await PromptComparer.ComparePromptsAsync(
+        preparedPrompts,
+        providerSettings);
 
     //------------------------------------------------------------------------//
     //                                TAKEAWAY                                //

@@ -152,6 +152,8 @@ dotnet test 04-function-calling/function-calling.tests/function-calling.tests.cs
 
 The tests load inputs and call ExperienceInputsValidator explicitly before calculation or a model request, matching Program.cs. Input rejection assertions belong to the validator tests; loading tests check the copied data. The in-memory transport supplies scripted responses while the actual SDK and Agent Framework build messages and execute the real calculator. It is a test dependency, not an application mode. These tests make **zero real API requests**. Native tool declarations, provider routing, and thought signature preservation are tested in [AiClientFactoryTests.cs](../../shared/shared.tests/AiClientFactoryTests.cs).
 
+[TestData/ExperienceTestData.cs](../function-calling.tests/TestData/ExperienceTestData.cs) prepares fresh inputs and scripted replies. [TestData/ExperienceResponseHandler.cs](../function-calling.tests/TestData/ExperienceResponseHandler.cs) supplies those replies at the HTTP boundary.
+
 Run the single real provider smoke test explicitly with:
 
 ```sh

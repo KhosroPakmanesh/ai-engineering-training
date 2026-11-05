@@ -32,7 +32,9 @@ public static class IndexValidator
         {
             if (!chunkIdStringsHashSet.Add(indexedChunk.DocumentChunk.ChunkIdString) ||
                 string.IsNullOrWhiteSpace(indexedChunk.DocumentChunk.TextString) ||
-                !indexedChunk.DocumentChunk.ChunkIdString.StartsWith(indexedChunk.DocumentChunk.FilenameString + "#chunk-", StringComparison.Ordinal))
+                !indexedChunk.DocumentChunk.ChunkIdString.StartsWith(
+                    indexedChunk.DocumentChunk.FilenameString + "#chunk-",
+                    StringComparison.Ordinal))
             {
                 throw new InvalidDataException("The index contains invalid or duplicate chunk IDs or empty text.");
             }
@@ -44,7 +46,9 @@ public static class IndexValidator
     {
         foreach (IndexedChunk indexedChunk in chunkIndex.IndexedChunks)
         {
-            ValidateVector(indexedChunk.VectorFloats, chunkIndex.IndexMetadata.DimensionsInt);
+            ValidateVector(
+                indexedChunk.VectorFloats,
+                chunkIndex.IndexMetadata.DimensionsInt);
             double squaredLengthDouble = indexedChunk.VectorFloats.Sum(valueFloat => (double)valueFloat * valueFloat);
             if (Math.Abs(squaredLengthDouble - 1) > 0.001)
             {
@@ -54,7 +58,12 @@ public static class IndexValidator
     }
 
     // Model and chunking changes require an explicit new index, even when vector sizes happen to match.
-    public static void ValidateCompatibility(ChunkIndex chunkIndex, string providerString, string modelString, int chunkSizeInt, int overlapInt)
+    public static void ValidateCompatibility(
+        ChunkIndex chunkIndex,
+        string providerString,
+        string modelString,
+        int chunkSizeInt,
+        int overlapInt)
     {
         IndexMetadata indexMetadata = chunkIndex.IndexMetadata;
         if (indexMetadata.ProviderString != providerString ||
@@ -63,20 +72,25 @@ public static class IndexValidator
             indexMetadata.OverlapInt != overlapInt ||
             indexMetadata.FormatVersionInt != 1)
         {
-            throw new InvalidDataException(
-                "Index provider, embedding model, or chunking settings differ. " +
+            throw new InvalidDataException("Index provider, embedding model, or chunking settings differ. " +
                 "Use a new SQLite path or Qdrant collection, or deliberately remove the old lesson index and rerun.");
         }
     }
 
     // Read the list's existing memory so checking a stored vector needs no second copy.
-    public static void ValidateVector(List<float> vectorFloats, int dimensionsInt)
+    public static void ValidateVector(
+        List<float> vectorFloats,
+        int dimensionsInt)
     {
-        ValidateVector(CollectionsMarshal.AsSpan(vectorFloats), dimensionsInt);
+        ValidateVector(
+            CollectionsMarshal.AsSpan(vectorFloats),
+            dimensionsInt);
     }
 
     // Check stored and provider vectors with the same rules, without changing their values.
-    public static void ValidateVector(ReadOnlySpan<float> vectorReadOnlySpan, int dimensionsInt)
+    public static void ValidateVector(
+        ReadOnlySpan<float> vectorReadOnlySpan,
+        int dimensionsInt)
     {
         if (dimensionsInt <= 0 || vectorReadOnlySpan.Length != dimensionsInt)
         {

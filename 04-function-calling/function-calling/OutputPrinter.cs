@@ -6,9 +6,10 @@ public static class OutputPrinter
     public static void PrintIntroduction(ExperienceInputs experienceInputs)
     {
         PrintHeading("Function Calling: let C# calculate the answer");
-        PrintColoredLine($"QUESTION | {experienceInputs.QuestionString}", ConsoleColor.Cyan);
-        Console.WriteLine(
-            $"Source: SampleData/jobs.json; evaluation date: {experienceInputs.EvaluationDateString}\n" +
+        PrintColoredLine(
+            $"QUESTION | {experienceInputs.QuestionString}",
+            ConsoleColor.Cyan);
+        Console.WriteLine($"Source: SampleData/jobs.json; evaluation date: {experienceInputs.EvaluationDateString}\n" +
             "The first model call selects CalculateExperience with the supplied dates.\n" +
             "C# checks those arguments, merges overlapping or touching jobs, and counts full calendar months.\n" +
             "The second model call receives the tool result and must report its total with the required citation.");
@@ -24,24 +25,36 @@ public static class OutputPrinter
     }
 
     // Preserve the redacted execution log even when source checks or calculation fail.
-    public static void PrintToolExecution(string toolNameString, long durationMillisecondsLong, bool succeededBool)
+    public static void PrintToolExecution(
+        string toolNameString,
+        long durationMillisecondsLong,
+        bool succeededBool)
     {
-        PrintColoredLine($"tool_name={toolNameString} inputs=[redacted] duration_ms={durationMillisecondsLong} succeeded={succeededBool}",
+        PrintColoredLine(
+            $"tool_name={toolNameString} inputs=[redacted] duration_ms={durationMillisecondsLong} succeeded={succeededBool}",
             ConsoleColor.Gray);
     }
 
     // Call this only after execution and answer checks; the printer does not establish acceptance.
-    public static void PrintResults(ParsedExperienceResponse parsedExperienceResponse, long requestMillisecondsLong)
+    public static void PrintResults(
+        ParsedExperienceResponse parsedExperienceResponse,
+        long requestMillisecondsLong)
     {
         ExperienceResult experienceResult = parsedExperienceResponse.ExperienceResult;
         PrintHeading("\nAccepted tool answer");
-        PrintColoredLine("── Answer 1 ───────────────────────────────", ConsoleColor.White);
-        Console.WriteLine($"Input intervals: {experienceResult.InputIntervalCount}; merged intervals: {experienceResult.MergedWorkIntervals.Count}");
-        Console.WriteLine($"Model calls: {parsedExperienceResponse.ModelCallCountInt}; tool executions: {parsedExperienceResponse.ToolExecutionCountInt}");
+        PrintColoredLine(
+            "── Answer 1 ───────────────────────────────",
+            ConsoleColor.White);
+        Console.WriteLine(
+            $"Input intervals: {experienceResult.InputIntervalCount}; merged intervals: {experienceResult.MergedWorkIntervals.Count}");
+        Console.WriteLine(
+            $"Model calls: {parsedExperienceResponse.ModelCallCountInt}; tool executions: {parsedExperienceResponse.ToolExecutionCountInt}");
         Console.WriteLine($"Request time: {requestMillisecondsLong} ms");
         Console.WriteLine(parsedExperienceResponse.AnswerString);
         Console.WriteLine("Accepted citations:");
-        PrintColoredLine("  [CalculateExperience.totalMonths] -> the executed calculator's totalMonths result", ConsoleColor.Cyan);
+        PrintColoredLine(
+            "  [CalculateExperience.totalMonths] -> the executed calculator's totalMonths result",
+            ConsoleColor.Cyan);
     }
 
     // Explain the arithmetic's boundary so a matching total is not mistaken for proof of employment.

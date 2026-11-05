@@ -8,11 +8,15 @@ public static class ExperienceInputsValidator
             throw new InvalidDataException("The question must contain between 1 and 500 characters.");
         }
 
-        ValidateIntervals(experienceInputs.WorkIntervals, experienceInputs.EvaluationDateString);
+        ValidateIntervals(
+            experienceInputs.WorkIntervals,
+            experienceInputs.EvaluationDateString);
     }
 
     // Validation reports invalid input without sorting, changing dates, or filling in unknown values.
-    public static void ValidateIntervals(List<WorkInterval> workIntervals, string? evaluationDateString)
+    public static void ValidateIntervals(
+        List<WorkInterval> workIntervals,
+        string? evaluationDateString)
     {
         if (workIntervals is null || workIntervals.Count == 0)
         {
@@ -21,7 +25,9 @@ public static class ExperienceInputsValidator
 
         if (evaluationDateString is not null)
         {
-            ExperienceCalculator.ReadDate(evaluationDateString, "evaluationDate");
+            ExperienceCalculator.ReadDate(
+                evaluationDateString,
+                "evaluationDate");
         }
 
         foreach (WorkInterval workInterval in workIntervals)
@@ -31,13 +37,17 @@ public static class ExperienceInputsValidator
                 throw new InvalidDataException("A work interval cannot be null.");
             }
 
-            DateOnly startDateOnly = ExperienceCalculator.ReadDate(workInterval.StartDateString, "startDate");
+            DateOnly startDateOnly = ExperienceCalculator.ReadDate(
+                workInterval.StartDateString,
+                "startDate");
             if (workInterval.EndDateString is null && evaluationDateString is null)
             {
                 throw new InvalidDataException("A current role requires an explicit evaluationDate.");
             }
 
-            DateOnly endDateOnly = ExperienceCalculator.ReadDate(workInterval.EndDateString ?? evaluationDateString, "endDate");
+            DateOnly endDateOnly = ExperienceCalculator.ReadDate(
+                workInterval.EndDateString ?? evaluationDateString,
+                "endDate");
             if (endDateOnly < startDateOnly)
             {
                 throw new InvalidDataException("A work interval's endDate precedes its startDate.");

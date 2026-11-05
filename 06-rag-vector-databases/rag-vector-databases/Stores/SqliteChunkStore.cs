@@ -49,11 +49,15 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
 
         sqliteTransaction.Commit();
 
-        return new(indexMetadata, indexedChunks);
+        return new(
+            indexMetadata,
+            indexedChunks);
     }
 
     // Upsert stable IDs and delete stale IDs atomically; a failed write preserves the previous snapshot.
-    public async Task SynchronizeAsync(ChunkIndex chunkIndex, CancellationToken cancellationToken = default)
+    public async Task SynchronizeAsync(
+        ChunkIndex chunkIndex,
+        CancellationToken cancellationToken = default)
     {
         using var sqliteConnection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -71,7 +75,9 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
             CREATE TEMP TABLE CurrentIds (Id TEXT PRIMARY KEY);
             INSERT INTO Metadata VALUES (1, $metadata) ON CONFLICT(Id) DO UPDATE SET Json = excluded.Json;
             """;
-        setupSqliteCommand.Parameters.AddWithValue("$metadata", JsonSerializer.Serialize(chunkIndex.IndexMetadata));
+        setupSqliteCommand.Parameters.AddWithValue(
+            "$metadata",
+            JsonSerializer.Serialize(chunkIndex.IndexMetadata));
         await setupSqliteCommand.ExecuteNonQueryAsync(cancellationToken);
         foreach (IndexedChunk indexedChunk in chunkIndex.IndexedChunks)
         {
@@ -82,9 +88,15 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
                 INSERT INTO Chunks VALUES ($id, $chunk, $vector)
                 ON CONFLICT(Id) DO UPDATE SET ChunkJson = excluded.ChunkJson, VectorJson = excluded.VectorJson;
                 """;
-            upsertSqliteCommand.Parameters.AddWithValue("$id", indexedChunk.DocumentChunk.ChunkIdString);
-            upsertSqliteCommand.Parameters.AddWithValue("$chunk", JsonSerializer.Serialize(indexedChunk.DocumentChunk));
-            upsertSqliteCommand.Parameters.AddWithValue("$vector", JsonSerializer.Serialize(indexedChunk.VectorFloats));
+            upsertSqliteCommand.Parameters.AddWithValue(
+                "$id",
+                indexedChunk.DocumentChunk.ChunkIdString);
+            upsertSqliteCommand.Parameters.AddWithValue(
+                "$chunk",
+                JsonSerializer.Serialize(indexedChunk.DocumentChunk));
+            upsertSqliteCommand.Parameters.AddWithValue(
+                "$vector",
+                JsonSerializer.Serialize(indexedChunk.VectorFloats));
             await upsertSqliteCommand.ExecuteNonQueryAsync(cancellationToken);
         }
         using SqliteCommand deleteSqliteCommand = sqliteConnection.CreateCommand();
@@ -96,18 +108,30 @@ public sealed class SqliteChunkStore(string pathString) : IChunkStore
     }
 
     // SQLite persists the vectors; this small collection is scanned exactly in C#.
-    public async Task<List<RetrievedChunk>> SearchAsync(List<float> queryFloats, int topKInt, CancellationToken cancellationToken = default)
+    public async Task<List<RetrievedChunk>> SearchAsync(
+        List<float> queryFloats,
+        int topKInt,
+        CancellationToken cancellationToken = default)
     {
         ChunkIndex chunkIndex = await ReadAsync(cancellationToken)
             ?? throw new InvalidDataException("Ingest documents before searching.");
 
-        IndexValidator.ValidateVector(queryFloats, chunkIndex.IndexMetadata.DimensionsInt);
+        IndexValidator.ValidateVector(
+            queryFloats,
+            chunkIndex.IndexMetadata.DimensionsInt);
 
         return chunkIndex.IndexedChunks
-            .Select(indexedChunk => new RetrievedChunk(indexedChunk.DocumentChunk, VectorMath.Cosine(indexedChunk.VectorFloats, queryFloats)))
+            .Select(indexedChunk => new RetrievedChunk(
+                indexedChunk.DocumentChunk,
+                VectorMath.Cosine(
+                    indexedChunk.VectorFloats,
+                    queryFloats)))
             .OrderByDescending(retrievedChunk => retrievedChunk.ScoreDouble)
-            .ThenBy(retrievedChunk => retrievedChunk.DocumentChunk.ChunkIdString, StringComparer.Ordinal)
-            .Take(topKInt).ToList();
+            .ThenBy(
+                retrievedChunk => retrievedChunk.DocumentChunk.ChunkIdString,
+                StringComparer.Ordinal)
+            .Take(topKInt)
+            .ToList();
     }
 
     // Connections belong to individual operations and are closed before the next stage.

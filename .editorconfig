@@ -20,7 +20,7 @@ trim_trailing_whitespace = false
 
 [*.cs]
 # Editor guideline only: dotnet format does not wrap parameter lists to this width.
-max_line_length = 140
+max_line_length = 120
 
 dotnet_sort_system_directives_first = true
 dotnet_separate_import_directive_groups = false
@@ -65,3 +65,11 @@ csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = false:suggestion
 dotnet_diagnostic.IDE0055.severity = suggestion
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+# These existing raw literals contain CRLF. Keep their prompt and fixture values unchanged.
+[07-mcp-server/mcp-client/ResumeAssistant.cs]
+end_of_line = crlf
+
+[07-mcp-server/mcp-client.tests/ResumePreparerTests.cs]
+end_of_line = crlf

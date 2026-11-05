@@ -5,9 +5,15 @@ public static class PromptTestData
     {
         return
         [
-            new("A: Zero-shot", "Prompts/A-zero-shot.txt"),
-            new("B: Few-shot", "Prompts/B-few-shot.txt"),
-            new("C: Constrained", "Prompts/C-constrained.txt")
+            new(
+                "A: Zero-shot",
+                "Prompts/A-zero-shot.txt"),
+            new(
+                    "B: Few-shot",
+                    "Prompts/B-few-shot.txt"),
+            new(
+                "C: Constrained",
+                "Prompts/C-constrained.txt")
         ];
     }
 

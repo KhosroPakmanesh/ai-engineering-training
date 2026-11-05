@@ -5,8 +5,15 @@ public static class ProfileNormalizer
     {
         return candidateProfile with
         {
-            Skills = candidateProfile.Skills.Select(skill => skill with { NameString = skill.NameString.Trim() })
-            .DistinctBy(skill => skill.NameString, StringComparer.OrdinalIgnoreCase).ToList()
+            Skills = candidateProfile.Skills
+            .Select(skill => skill with
+            {
+                NameString = skill.NameString.Trim()
+            })
+            .DistinctBy(
+                skill => skill.NameString,
+                StringComparer.OrdinalIgnoreCase)
+            .ToList()
         };
     }
 }

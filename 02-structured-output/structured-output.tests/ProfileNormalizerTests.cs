@@ -6,13 +6,31 @@ public class ProfileNormalizerTests
     [Fact]
     public void Skill_normalization_trims_names_and_keeps_the_first_duplicate()
     {
+        // Arrange
         CandidateProfile candidateProfile = ProfileTestData.ReadExample();
         Skill originalSkill = candidateProfile.Skills[0];
+
         candidateProfile = candidateProfile with
         {
-            Skills = [originalSkill with { NameString = " " + originalSkill.NameString + " " }, originalSkill with { NameString = originalSkill.NameString.ToLowerInvariant() }]
+            Skills =
+            [
+                originalSkill with
+                {
+                    NameString = " " + originalSkill.NameString + " "
+                },
+                originalSkill with
+                {
+                    NameString = originalSkill.NameString.ToLowerInvariant()
+                }
+            ]
         };
+
+        // Act
         Skill acceptedSkill = Assert.Single(ProfileNormalizer.NormalizeProfile(candidateProfile).Skills);
-        Assert.Equal(originalSkill, acceptedSkill);
+
+        // Assert
+        Assert.Equal(
+            originalSkill,
+            acceptedSkill);
     }
 }

@@ -6,8 +6,11 @@ public static class OutputPrinter
     public static void PrintIntroduction(List<PreparedPrompt> preparedPrompts)
     {
         PrintHeading("Prompt Engineering: compare summary instructions");
-        PrintColoredLine("SOURCE | resume.md", ConsoleColor.Cyan);
-        Console.WriteLine($"Instructions: {string.Join(", ", preparedPrompts.Select(preparedPrompt => preparedPrompt.PathString))}");
+        PrintColoredLine(
+            "SOURCE | resume.md",
+            ConsoleColor.Cyan);
+        Console.WriteLine(
+            $"Instructions: {string.Join(", ", preparedPrompts.Select(preparedPrompt => preparedPrompt.PathString))}");
         Console.WriteLine(
             $"Summarize the same fictional resume with {preparedPrompts.Count} different prompt instructions.\n" +
             "A: Zero-shot asks directly. B: Few-shot supplies examples. C: Constrained adds a 70-word limit.\n" +
@@ -20,24 +23,38 @@ public static class OutputPrinter
     }
 
     // Label the case before its request so failures can be traced to the current prompt.
-    public static void PrintPromptHeading(int numberInt, string nameString)
+    public static void PrintPromptHeading(
+        int numberInt,
+        string nameString)
     {
-        PrintColoredLine($"\n── Summary {numberInt} ──────────────────────────", ConsoleColor.White);
-        PrintColoredLine($"PROMPT | {nameString}", ConsoleColor.Cyan);
+        PrintColoredLine(
+            $"\n── Summary {numberInt} ──────────────────────────",
+            ConsoleColor.White);
+        PrintColoredLine(
+            $"PROMPT | {nameString}",
+            ConsoleColor.Cyan);
     }
 
     // Show the selected connection without exposing credentials.
     public static void PrintRequestDetails(ProviderSettings providerSettings)
     {
-        PrintColoredLine($"Model: {providerSettings.ModelString}", ConsoleColor.Gray);
-        PrintColoredLine($"Provider: {providerSettings.NameString}", ConsoleColor.Gray);
+        PrintColoredLine(
+            $"Model: {providerSettings.ModelString}",
+            ConsoleColor.Gray);
+        PrintColoredLine(
+            $"Provider: {providerSettings.NameString}",
+            ConsoleColor.Gray);
     }
 
     // Show the original answer beside the word count supplied by the comparison stage.
-    public static void PrintSummary(string summaryString, int wordCountInt)
+    public static void PrintSummary(
+        string summaryString,
+        int wordCountInt)
     {
         Console.WriteLine(summaryString);
-        PrintColoredLine($"WORD COUNT | {wordCountInt}", ConsoleColor.DarkYellow);
+        PrintColoredLine(
+            $"WORD COUNT | {wordCountInt}",
+            ConsoleColor.DarkYellow);
     }
 
     // A short answer can still contain a wrong fact, so the learner needs to inspect the resume.
